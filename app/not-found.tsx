@@ -1,0 +1,25 @@
+import Link from "next/link"
+import { SearchX } from "lucide-react"
+import { EmptyState } from "@/components/empty-state"
+import { PageHeader } from "@/components/page-header"
+import { Button } from "@/components/ui/button"
+
+export default function NotFound() {
+  return (
+    <>
+      <PageHeader title="Not found" />
+      <div className="p-4 md:p-6">
+        <EmptyState
+          icon={SearchX}
+          title="This page doesn't exist"
+          description="If you created it earlier, note that mock data resets when the page is refreshed."
+          action={
+            <Button asChild variant="outline">
+              <Link href="/icps">Back to ICPs</Link>
+            </Button>
+          }
+        />
+      </div>
+    </>
+  )
+}

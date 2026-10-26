@@ -1,36 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Outreacher (frontend prototype)
 
-## Getting Started
+Personalized cold email dashboard: define ICPs, import leads, enrich them with recent posts and website content, and generate one email per lead from editable, versioned prompts.
 
-First, run the development server:
+This is the frontend only. There is no backend, database or real scraping/LLM call. Everything runs on mock data in client state and resets on refresh.
+
+## Run
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000 (redirects to `/icps`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Where things live
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Path | What |
+| --- | --- |
+| `lib/types.ts` | All data types |
+| `lib/mock-data.ts` | Seed data: 3 ICPs, 75 leads, enrichment items, generations, prompt templates and versions, settings |
+| `lib/mock-actions.ts` | Every fake async call: enrichment, generation, prompt test, cost estimates. **Replace these bodies with real API calls.** |
+| `lib/store.tsx` | One React Context holding app state plus the actions pages call |
+| `lib/templating.ts` | Real `{{variable}}` prompt renderer (no eval) |
+| `lib/import.ts`, `lib/csv.ts` | CSV parsing, column auto-mapping, dedupe, website derivation, CSV export |
+| `lib/diff.ts` | Line diff for prompt version comparison |
 
-## Learn More
+## Plugging in a backend
 
-To learn more about Next.js, take a look at the following resources:
+1. Replace the function bodies in `lib/mock-actions.ts` with API calls, keeping the signatures.
+2. Replace the `useState(mock.x)` seeds in `lib/store.tsx` with fetched data, and route the store actions through your API.
+3. Pages only talk to the store, so they shouldn't need changes.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Notes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Costs use the per-source constants in `mock-actions.ts`. Prompt test token pricing is a placeholder, not real model pricing.
+- `lib/utils.ts` has a minimal `cn` helper. Swap it for the `cn` package (`npm install cn`, then `export { cn } from "cn"`) so Tailwind class overrides merge properly. Until then, pages use the `!` modifier where they override component defaults.

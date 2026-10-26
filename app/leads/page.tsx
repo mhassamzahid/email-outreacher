@@ -1,0 +1,206 @@
+"use client"
+
+import { useState } from "react"
+import { ArrowRightLeft, Search, Trash2, Users } from "lucide-react"
+import { toast } from "sonner"
+import { ConfirmDialog } from "@/components/confirm-dialog"
+import { EmptyState } from "@/components/empty-state"
+import { LeadsTable } from "@/components/leads-table"
+import { PageHeader } from "@/components/page-header"
+import { TableSkeleton } from "@/components/table-skeleton"
+import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useMockLoading } from "@/hooks/use-mock-loading"
+import { LEAD_STATUS_LABEL, SOURCE_LABEL, fullName } from "@/lib/format"
+import { leadSources } from "@/lib/mock-data"
+import { useStore } from "@/lib/store"
+import { LEAD_STATUSES, SOURCES } from "@/lib/types"
+
+export default function LeadsPage() {
+  const { leads, icps, moveLeads, deleteLeads } = useStore()
+  const loading = useMockLoading()
+  const [query, setQuery] = useState("")
+  const [icpFilter, setIcpFilter] = useState("all")
+  const [status, setStatus] = useState("all")
+  const [source, setSource] = useState("all")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [moveOpen, setMoveOpen] = useState(false)
+  const [moveTarget, setMoveTarget] = useState("")
+  const [deleteOpen, setDeleteOpen] = useState(false)
+
+  const q = query.trim().toLowerCase()
+  const visible = leads.filter((l) => {
+    const sources = leadSources(l)
+    return (
+      (icpFilter === "all" || l.icpId === icpFilter) &&
+      (status === "all" || l.status === status) &&
+      (source === "all" ||
+        (source === "none" ? sources.every((s) => s === "website") : sources.includes(source as (typeof SOURCES)[number]))) &&
+      (!q || `${fullName(l)} ${l.email} ${l.company} ${l.title}`.toLowerCase().includes(q))
+    )
+  })
+  const filtered = query || icpFilter !== "all" || status !== "all" || source !== "all"
+  const ids = Array.from(selected)
+
+  const clear = () => {
+    setQuery("")
+    setIcpFilter("all")
+    setStatus("all")
+    setSource("all")
+  }
+
+  return (
+    <>
+      <PageHeader title="Leads" description="Every lead across all ICPs" />
+      <div className="space-y-4 p-4 md:p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label="Search leads" placeholder="Search leads" className="pl-8" value={query} onChange={(e) => setQuery(e.target.value)} />
+          </div>
+          <Select value={icpFilter} onValueChange={setIcpFilter}>
+            <SelectTrigger aria-label="Filter by ICP" className="w-48!">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All ICPs</SelectItem>
+              {icps.map((i) => (
+                <SelectItem key={i.id} value={i.id}>
+                  {i.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={status} onValueChange={setStatus}>
+            <SelectTrigger aria-label="Filter by status" className="w-36!">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All statuses</SelectItem>
+              {LEAD_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {LEAD_STATUS_LABEL[s]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={source} onValueChange={setSource}>
+            <SelectTrigger aria-label="Filter by source" className="w-40!">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any source</SelectItem>
+              {SOURCES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  Has {SOURCE_LABEL[s]}
+                </SelectItem>
+              ))}
+              <SelectItem value="none">No social profiles</SelectItem>
+            </SelectContent>
+          </Select>
+          <div className="ml-auto flex gap-2">
+            <Button
+              variant="outline"
+              disabled={ids.length === 0}
+              onClick={() => {
+                setMoveTarget("")
+                setMoveOpen(true)
+              }}
+            >
+              <ArrowRightLeft /> Move{ids.length ? ` (${ids.length})` : ""}
+            </Button>
+            <Button variant="destructive" disabled={ids.length === 0} onClick={() => setDeleteOpen(true)}>
+              <Trash2 /> Delete{ids.length ? ` (${ids.length})` : ""}
+            </Button>
+          </div>
+        </div>
+
+        {loading ? (
+          <TableSkeleton />
+        ) : leads.length === 0 ? (
+          <EmptyState icon={Users} title="No leads yet" description="Import a CSV from an ICP's Leads tab." />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            icon={Search}
+            title="No leads match these filters"
+            action={
+              filtered && (
+                <Button variant="outline" onClick={clear}>
+                  Clear filters
+                </Button>
+              )
+            }
+          />
+        ) : (
+          <LeadsTable leads={visible} selected={selected} onSelectedChange={setSelected} showIcp />
+        )}
+      </div>
+
+      <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move {ids.length} lead{ids.length === 1 ? "" : "s"}</DialogTitle>
+            <DialogDescription>
+              Leads keep their content and drafts. Future generations use the new ICP&apos;s messaging and prompts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Destination ICP</Label>
+            <Select value={moveTarget} onValueChange={setMoveTarget}>
+              <SelectTrigger className="w-full!" aria-label="Destination ICP">
+                <SelectValue placeholder="Choose an ICP" />
+              </SelectTrigger>
+              <SelectContent>
+                {icps.map((i) => (
+                  <SelectItem key={i.id} value={i.id}>
+                    {i.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={!moveTarget}
+              onClick={() => {
+                moveLeads(ids, moveTarget)
+                setMoveOpen(false)
+                setSelected(new Set())
+                toast.success(`Moved ${ids.length} lead${ids.length === 1 ? "" : "s"} to ${icps.find((i) => i.id === moveTarget)?.name}`)
+              }}
+            >
+              Move leads
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        destructive
+        title={`Delete ${ids.length} lead${ids.length === 1 ? "" : "s"}?`}
+        description="Their enrichment content and email drafts are deleted too. This can't be undone."
+        confirmLabel={`Delete ${ids.length} lead${ids.length === 1 ? "" : "s"}`}
+        onConfirm={() => {
+          deleteLeads(ids)
+          setSelected(new Set())
+          toast.success(`Deleted ${ids.length} lead${ids.length === 1 ? "" : "s"}`)
+        }}
+      />
+    </>
+  )
+}
