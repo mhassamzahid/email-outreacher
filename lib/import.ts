@@ -1,3 +1,4 @@
+import { downloadCsv, toCsv } from "./csv"
 import { uid } from "./mock-actions"
 import type { Lead } from "./types"
 
@@ -217,6 +218,16 @@ export function buildImport(
   }
 
   return { leads, stats, rowOutcome, derivedWebsite }
+}
+
+/** The layout the import reads best, and the same one the backend serves at /api/v1/leads/template.csv. */
+export const LEAD_TEMPLATE_CSV = [
+  ["first_name", "last_name", "email", "company", "title", "website", "linkedin_url", "instagram_url", "facebook_url"],
+  ["Ava", "Morgan", "ava@brightloom.com", "Brightloom", "Founder", "brightloom.com", "linkedin.com/in/ava-morgan", "instagram.com/brightloom", ""],
+]
+
+export function downloadLeadTemplate() {
+  downloadCsv("leads-template.csv", toCsv(LEAD_TEMPLATE_CSV))
 }
 
 export const SAMPLE_CSV = [

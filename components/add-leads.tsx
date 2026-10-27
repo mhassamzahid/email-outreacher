@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useRef, useState, type ReactNode } from "react"
-import { ChevronDown, Plus, Upload, UserPlus, X } from "lucide-react"
+import { ChevronDown, Download, Plus, Upload, UserPlus, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -27,7 +28,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { fullName } from "@/lib/format"
-import { EMAIL_PATTERN, createLead, websiteFromEmail, type LeadField } from "@/lib/import"
+import { EMAIL_PATTERN, createLead, downloadLeadTemplate, websiteFromEmail, type LeadField } from "@/lib/import"
 import { useStore } from "@/lib/store"
 
 /** "Add leads" menu: import a CSV or add one lead by hand. Without an ICP it asks which one. */
@@ -67,6 +68,10 @@ export function AddLeadsMenu({ icpId, variant = "outline" }: { icpId?: string; v
           )}
           <DropdownMenuItem onSelect={() => setManualOpen(true)} disabled={icps.length === 0}>
             <UserPlus /> Add manually
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={downloadLeadTemplate}>
+            <Download /> Download CSV template
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

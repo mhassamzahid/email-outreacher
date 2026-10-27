@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useIcpParam } from "@/hooks/use-icp"
 import { downloadCsv, parseCsv, toCsv } from "@/lib/csv"
 import { fullName, formatUsd } from "@/lib/format"
-import { LEAD_FIELDS, SAMPLE_CSV, buildImport, suggestMapping, type MappingTarget } from "@/lib/import"
+import { LEAD_FIELDS, SAMPLE_CSV, buildImport, downloadLeadTemplate, suggestMapping, type MappingTarget } from "@/lib/import"
 import { estimateEnrichmentCost } from "@/lib/mock-actions"
 import { leadSources } from "@/lib/mock-data"
 import { useStore } from "@/lib/store"
@@ -117,9 +117,18 @@ export default function ImportPage() {
             <AlertTriangle className="size-4" /> {error}
           </p>
         )}
-        <Button variant="link" className="px-0" onClick={() => downloadCsv("sample-leads.csv", toCsv(SAMPLE_CSV))}>
-          <Download /> Download sample CSV
-        </Button>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <Button variant="link" className="px-0" onClick={downloadLeadTemplate}>
+            <Download /> Download template
+          </Button>
+          <Button
+            variant="link"
+            className="px-0 font-normal text-muted-foreground!"
+            onClick={() => downloadCsv("sample-leads.csv", toCsv(SAMPLE_CSV))}
+          >
+            Download sample with test rows
+          </Button>
+        </div>
       </div>
     )
   }
