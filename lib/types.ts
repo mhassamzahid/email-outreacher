@@ -163,3 +163,28 @@ export interface ScoringSettings {
   /** Most emails auto-sent per day; the rest wait in review. */
   dailyAutoSendCap: number
 }
+
+export type Role = "sales" | "management" | "admin"
+
+export const ROLES: Role[] = ["sales", "management", "admin"]
+
+export type UserStatus = "active" | "invited" | "deactivated"
+
+export interface User {
+  id: string
+  name: string
+  email: string
+  role: Role
+  workspaceIds: string[]
+  status: UserStatus
+  /** null until they first sign in. */
+  lastActiveAt: string | null
+  createdAt: string
+}
+
+export interface Workspace {
+  id: string
+  name: string
+  description: string
+  createdAt: string
+}

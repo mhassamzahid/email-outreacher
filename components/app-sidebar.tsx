@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import type { CSSProperties } from "react"
-import { FileText, Inbox, PanelLeftClose, Settings, Target, Users } from "lucide-react"
+import { useState, type CSSProperties } from "react"
+import { Check, ChevronsUpDown, FileText, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { toast } from "sonner"
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +20,15 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { WorkspaceDialog } from "@/components/users/workspace-dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { formatUsd } from "@/lib/format"
 import { generationByLead } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
@@ -36,7 +46,8 @@ function Mark() {
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { generations, settings } = useStore()
+  const { generations, settings, users, currentUserId } = useStore()
+  const isAdmin = users.find((u) => u.id === currentUserId)?.role === "admin"
   const toReview = Array.from(generationByLead(generations).values()).filter(
     (g) => g.status === "draft" || g.status === "edited",
   ).length
@@ -47,6 +58,7 @@ export function AppSidebar() {
     { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/prompts", label: "Prompts", icon: FileText },
+    ...(isAdmin ? [{ href: "/users", label: "Users", icon: UserCog }] : []),
     { href: "/settings", label: "Settings", icon: Settings },
   ]
 
@@ -59,13 +71,7 @@ export function AppSidebar() {
             Outreacher
           </span>
         </Link>
-        <div
-          className="sidebar-reveal flex items-center justify-between rounded-md px-2 py-1.5 text-[13px] whitespace-nowrap group-data-[collapsible=icon]:hidden"
-          style={{ "--i": 1 } as CSSProperties}
-        >
-          <span className="text-muted-foreground">Workspace</span>
-          <span className="font-medium text-foreground">AheadTech360</span>
-        </div>
+        <WorkspaceSwitcher isAdmin={isAdmin} />
       </SidebarHeader>
       <SidebarContent>
         <SidebarGroup>
@@ -99,7 +105,7 @@ export function AppSidebar() {
         <Link
           href="/settings"
           className="sidebar-reveal space-y-1.5 rounded-md px-2 py-2 whitespace-nowrap transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden"
-          style={{ "--i": 6 } as CSSProperties}
+          style={{ "--i": nav.length + 2 } as CSSProperties}
         >
           <div className="flex items-baseline justify-between text-[13px]">
             <span className="text-muted-foreground">Spend this month</span>
@@ -123,6 +129,61 @@ export function AppSidebar() {
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
+  )
+}
+
+/** The current workspace; opens a menu to switch to another or, for admins, create one. */
+function WorkspaceSwitcher({ isAdmin }: { isAdmin: boolean }) {
+  const { users, workspaces, currentUserId, currentWorkspaceId, setCurrentWorkspace } = useStore()
+  const [creating, setCreating] = useState(false)
+  const me = users.find((u) => u.id === currentUserId)
+  const mine = workspaces.filter((w) => isAdmin || me?.workspaceIds.includes(w.id))
+  const current = workspaces.find((w) => w.id === currentWorkspaceId)
+
+  const switchTo = (id: string, name: string) => {
+    setCurrentWorkspace(id)
+    toast.success(`Switched to ${name}`)
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className="sidebar-reveal flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] whitespace-nowrap outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
+          style={{ "--i": 1 } as CSSProperties}
+          aria-label={`Workspace: ${current?.name}. Switch workspace`}
+        >
+          <span className="text-muted-foreground">Workspace</span>
+          <span className="ml-auto truncate font-medium text-foreground">{current?.name}</span>
+          <ChevronsUpDown className="size-3.5 flex-none text-muted-foreground" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-56">
+          <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Workspaces</DropdownMenuLabel>
+          {mine.map((w) => (
+            <DropdownMenuItem key={w.id} onSelect={() => w.id !== currentWorkspaceId && switchTo(w.id, w.name)}>
+              <span className="min-w-0 flex-1 truncate">{w.name}</span>
+              {w.id === currentWorkspaceId && <Check className="text-data" />}
+            </DropdownMenuItem>
+          ))}
+          {isAdmin && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setCreating(true)}>
+                <FolderPlus /> Create workspace
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <Link href="/users?tab=workspaces">
+                  <UserCog /> Manage workspaces
+                </Link>
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {creating && (
+        <WorkspaceDialog onClose={() => setCreating(false)} onCreated={(ws) => setCurrentWorkspace(ws.id)} />
+      )}
+    </>
   )
 }
 

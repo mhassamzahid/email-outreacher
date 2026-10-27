@@ -18,6 +18,8 @@ import type {
   PromptVersion,
   Settings,
   Source,
+  User,
+  Workspace,
 } from "./types"
 
 // Client-side app state shared across pages. Seeded from mock data and reset on refresh.
@@ -89,6 +91,22 @@ interface Store {
   /** Removes a template and its versions. Callers check it is not the default or in use. */
   deleteTemplate: (templateId: string) => void
   setDefaultTemplate: (templateId: string) => void
+
+  users: User[]
+  workspaces: Workspace[]
+  currentUserId: string
+  currentWorkspaceId: string
+  setCurrentWorkspace: (id: string) => void
+  /** Adds the person as "invited" (simulated: no email is sent). */
+  inviteUser: (input: Pick<User, "name" | "email" | "role" | "workspaceIds">) => User
+  updateUser: (id: string, patch: Partial<Pick<User, "name" | "role" | "workspaceIds" | "status">>) => void
+  removeUser: (id: string) => void
+  createWorkspace: (input: { name: string; description: string; memberIds: string[] }) => Workspace
+  updateWorkspace: (id: string, patch: Partial<Pick<Workspace, "name" | "description">>) => void
+  /** Sets which non-admins can open the workspace. Admins always can, so they're left alone. */
+  setWorkspaceMembers: (id: string, memberIds: string[]) => void
+  /** Removes the workspace and takes it off every user. Callers check it is not the current one. */
+  deleteWorkspace: (id: string) => void
 }
 
 const StoreContext = createContext<Store | null>(null)
@@ -118,6 +136,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState(mock.settings)
   const [enrichJobs, setEnrichJobs] = useState<Record<string, EnrichmentJob>>({})
   const [genJobs, setGenJobs] = useState<Record<string, GenerationJob>>({})
+  const [users, setUsers] = useState(mock.users)
+  const [workspaces, setWorkspaces] = useState(mock.workspaces)
+  const [currentWorkspaceId, setCurrentWorkspace] = useState(mock.workspaces[0].id)
 
   const addSpend = (usd: number) =>
     setSettings((s) => ({ ...s, spentThisMonthUsd: Math.round((s.spentThisMonthUsd + usd) * 10000) / 10000 }))
@@ -356,6 +377,52 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTemplates((list) => list.map((t) => (t.kind === tpl.kind ? { ...t, isDefault: t.id === templateId } : t)))
   }
 
+  const inviteUser: Store["inviteUser"] = (input) => {
+    const user: User = {
+      ...input,
+      name: input.name.trim(),
+      email: input.email.trim().toLowerCase(),
+      id: uid("usr"),
+      status: "invited",
+      lastActiveAt: null,
+      createdAt: new Date().toISOString(),
+    }
+    setUsers((list) => [...list, user])
+    return user
+  }
+
+  const updateUser: Store["updateUser"] = (id, patch) =>
+    setUsers((list) => list.map((u) => (u.id === id ? { ...u, ...patch } : u)))
+
+  const removeUser: Store["removeUser"] = (id) => setUsers((list) => list.filter((u) => u.id !== id))
+
+  const createWorkspace: Store["createWorkspace"] = ({ name, description, memberIds }) => {
+    const ws: Workspace = { id: uid("ws"), name: name.trim(), description: description.trim(), createdAt: new Date().toISOString() }
+    setWorkspaces((list) => [...list, ws])
+    // Admins see every workspace; everyone else only the ones they were added to.
+    setUsers((list) =>
+      list.map((u) => (u.role === "admin" || memberIds.includes(u.id) ? { ...u, workspaceIds: [...u.workspaceIds, ws.id] } : u)),
+    )
+    return ws
+  }
+
+  const updateWorkspace: Store["updateWorkspace"] = (id, patch) =>
+    setWorkspaces((list) => list.map((w) => (w.id === id ? { ...w, ...patch } : w)))
+
+  const setWorkspaceMembers: Store["setWorkspaceMembers"] = (id, memberIds) =>
+    setUsers((list) =>
+      list.map((u) => {
+        if (u.role === "admin") return u
+        const without = u.workspaceIds.filter((w) => w !== id)
+        return { ...u, workspaceIds: memberIds.includes(u.id) ? [...without, id] : without }
+      }),
+    )
+
+  const deleteWorkspace: Store["deleteWorkspace"] = (id) => {
+    setWorkspaces((list) => list.filter((w) => w.id !== id))
+    setUsers((list) => list.map((u) => ({ ...u, workspaceIds: u.workspaceIds.filter((w) => w !== id) })))
+  }
+
   return (
     <StoreContext.Provider
       value={{
@@ -388,6 +455,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         createTemplate,
         deleteTemplate,
         setDefaultTemplate,
+        users,
+        workspaces,
+        currentUserId: mock.CURRENT_USER_ID,
+        currentWorkspaceId,
+        setCurrentWorkspace,
+        inviteUser,
+        updateUser,
+        removeUser,
+        createWorkspace,
+        updateWorkspace,
+        setWorkspaceMembers,
+        deleteWorkspace,
       }}
     >
       {children}
