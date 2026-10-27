@@ -2,34 +2,57 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { ExternalLink, MailCheck, Search, UserSearch } from "lucide-react"
+import { ExternalLink, MailCheck, Newspaper, Search, UserPlus, UserSearch } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
 import { IcpSearchDialog } from "@/components/people/icp-search-dialog"
+import { PostsSheet } from "@/components/people/posts-sheet"
 import { Pill, type PillTone } from "@/components/status"
 import { TableSkeleton } from "@/components/table-skeleton"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { type Stakeholder, fetchAllStakeholders, fetchCompanies, fetchIcps, revealStakeholders, useApi } from "@/lib/api"
-import { shortDate } from "@/lib/format"
+import {
+  type ApiPost,
+  type Stakeholder,
+  addAsLeads,
+  fetchAllStakeholders,
+  fetchCompanies,
+  fetchIcps,
+  fetchLeadPosts,
+  fetchPosts,
+  revealStakeholders,
+  useApi,
+} from "@/lib/api"
+import { formatUsd, shortDate } from "@/lib/format"
 import { useStore } from "@/lib/store"
 
 const MAX_REVEAL = 25
+const MAX_FETCH = 25
+// Apify: about $2 per 1,000 LinkedIn posts and up to $2.70 per 1,000 Instagram posts.
+const COST_PER_POST = 0.0027
 
 function emailCell(s: Stakeholder): { text: string; tone: PillTone } {
-  if (!s.revealedAt) return s.hasEmail ? { text: "Has email", tone: "info" } : { text: "No email on file", tone: "neutral" }
+  if (!s.revealedAt) {
+    if (s.source === "apify_linkedin") return { text: "Not looked up", tone: "neutral" }
+    return s.hasEmail ? { text: "Has email", tone: "info" } : { text: "No email on file", tone: "neutral" }
+  }
   if (s.emailStatus === "no_match") return { text: "No match", tone: "neutral" }
   if (!s.email) return { text: "No email found", tone: "neutral" }
   return { text: s.emailStatus ?? "Email", tone: s.emailStatus === "verified" ? "positive" : "warning" }
 }
 
-/** Everyone Apollo found for this workspace, by company or by ICP, and revealing their emails. */
+/** Unrevealed Apollo people only have a masked name and no contact, so they need revealing first. */
+const canBeLead = (s: Stakeholder) => !s.leadId && !!(s.linkedinUrl || s.email) && !(s.source === "apollo" && !s.revealedAt)
+
+/** Everyone found for this workspace, by company, ICP or LinkedIn, and turning them into leads with posts. */
 export function PeopleView() {
   const { currentWorkspaceId, workspaces } = useStore()
   const workspace = workspaces.find((w) => w.id === currentWorkspaceId)
@@ -37,7 +60,7 @@ export function PeopleView() {
     <>
       <PageHeader
         title="People"
-        description={`Stakeholders found in Apollo for ${workspace?.name ?? "this workspace"}. Revealing someone's email adds them as a lead.`}
+        description={`Stakeholders found for ${workspace?.name ?? "this workspace"}. Make them leads, fetch their posts, and reveal emails.`}
       />
       <div className="space-y-4 px-4 pb-10 md:px-8">
         <WorkspaceGate>{(wsId) => <PeopleList key={wsId} wsId={wsId} />}</WorkspaceGate>
@@ -49,31 +72,40 @@ export function PeopleView() {
 function PeopleList({ wsId }: { wsId: string }) {
   const people = useApi(() => fetchAllStakeholders(wsId), [wsId])
   const icps = useApi(() => fetchIcps(wsId), [wsId])
-  // Names for people found through a company search; the rest carry Apollo's company name.
+  // Names for people found through a company search; the rest carry their employer's name as found.
   const companies = useApi(() => fetchCompanies(wsId, "inWorkspace"), [wsId])
+  const posts = useApi(() => fetchPosts(wsId), [wsId])
   const [query, setQuery] = useState("")
-  const [icpFilter, setIcpFilter] = useState("all")
+  const [foundBy, setFoundBy] = useState("all")
   const [status, setStatus] = useState("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [searching, setSearching] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
+  const [confirmingReveal, setConfirmingReveal] = useState(false)
+  const [fetchingPosts, setFetchingPosts] = useState(false)
+  const [busy, setBusy] = useState("")
+  const [reading, setReading] = useState<Stakeholder | null>(null)
 
   const list = people.data ?? []
   const icpName = new Map((icps.data ?? []).map((i) => [i.id, i.name]))
   const companyName = new Map((companies.data ?? []).map((c) => [c.id, c.name]))
   const company = (s: Stakeholder) => (s.companyId && companyName.get(s.companyId)) || s.organizationName || "—"
+  const postsByLead = new Map<string, ApiPost[]>()
+  for (const p of posts.data ?? []) postsByLead.set(p.leadId, [...(postsByLead.get(p.leadId) ?? []), p])
 
   const q = query.trim().toLowerCase()
   const visible = list.filter(
     (s) =>
-      (icpFilter === "all" || (icpFilter === "company" ? !s.icpId : s.icpId === icpFilter)) &&
-      (status === "all" || (status === "revealed" ? !!s.revealedAt : !s.revealedAt)) &&
+      (foundBy === "all" ||
+        (foundBy === "company" ? s.source === "apollo" && !s.icpId : foundBy === "linkedin" ? s.source === "apify_linkedin" : s.icpId === foundBy)) &&
+      (status === "all" ||
+        (status === "lead" ? !!s.leadId : status === "revealed" ? !!s.revealedAt : !s.revealedAt)) &&
       (!q || `${s.firstName} ${s.lastName} ${s.title} ${company(s)} ${s.email ?? ""}`.toLowerCase().includes(q)),
   )
-  const revealable = visible.filter((s) => !s.revealedAt)
-  const picked = list.filter((s) => selected.has(s.id) && !s.revealedAt)
-  const allChecked = revealable.length > 0 && revealable.every((s) => selected.has(s.id))
+  const picked = list.filter((s) => selected.has(s.id))
+  const toReveal = picked.filter((s) => !s.revealedAt)
+  const toAdd = picked.filter(canBeLead)
+  const withLead = picked.filter((s) => s.leadId)
+  const allChecked = visible.length > 0 && visible.every((s) => selected.has(s.id))
 
   const toggle = (id: string, on: boolean) =>
     setSelected((set) => {
@@ -84,9 +116,9 @@ function PeopleList({ wsId }: { wsId: string }) {
     })
 
   const reveal = async () => {
-    setBusy(true)
+    setBusy("reveal")
     try {
-      const r = await revealStakeholders(wsId, picked.map((s) => s.id))
+      const r = await revealStakeholders(wsId, toReveal.map((s) => s.id))
       if (r.error) toast.error("Apollo refused", { description: r.error })
       const leads = r.outcomes.filter((o) => o.leadCreated).length
       const noMatch = r.outcomes.filter((o) => o.status === "no_match").length
@@ -102,7 +134,23 @@ function PeopleList({ wsId }: { wsId: string }) {
     } catch (e) {
       toast.error("Couldn't reveal", { description: e instanceof Error ? e.message : undefined })
     } finally {
-      setBusy(false)
+      setBusy("")
+    }
+  }
+
+  const addLeads = async () => {
+    setBusy("add")
+    try {
+      const r = await addAsLeads(wsId, toAdd.map((s) => s.id))
+      toast.success(`${r.added} added as ${r.added === 1 ? "a lead" : "leads"}`, {
+        description: r.linkedExisting ? `${r.linkedExisting} were already leads and are now linked.` : undefined,
+      })
+      setSelected(new Set())
+      people.reload()
+    } catch (e) {
+      toast.error("Couldn't add them", { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setBusy("")
     }
   }
 
@@ -122,13 +170,14 @@ function PeopleList({ wsId }: { wsId: string }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <Select value={icpFilter} onValueChange={setIcpFilter}>
+        <Select value={foundBy} onValueChange={setFoundBy}>
           <SelectTrigger aria-label="Filter by how they were found" className="w-52!">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Found any way</SelectItem>
-            <SelectItem value="company">By company search</SelectItem>
+            <SelectItem value="company">Apollo company search</SelectItem>
+            <SelectItem value="linkedin">LinkedIn (Apify)</SelectItem>
             {(icps.data ?? []).map((i) => (
               <SelectItem key={i.id} value={i.id}>
                 ICP: {i.name}
@@ -137,41 +186,54 @@ function PeopleList({ wsId }: { wsId: string }) {
           </SelectContent>
         </Select>
         <Select value={status} onValueChange={setStatus}>
-          <SelectTrigger aria-label="Filter by email" className="w-44!">
+          <SelectTrigger aria-label="Filter by status" className="w-44!">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Any email status</SelectItem>
-            <SelectItem value="hidden">Not revealed yet</SelectItem>
-            <SelectItem value="revealed">Revealed</SelectItem>
+            <SelectItem value="all">Any status</SelectItem>
+            <SelectItem value="hidden">Email not revealed</SelectItem>
+            <SelectItem value="revealed">Email revealed</SelectItem>
+            <SelectItem value="lead">Leads</SelectItem>
           </SelectContent>
         </Select>
-        <div className="ml-auto flex items-center gap-2">
-          {picked.length > 0 && (
+        <Button size="sm" className="ml-auto" disabled={!icps.data?.length} onClick={() => setSearching(true)}>
+          <UserSearch /> Search Apollo by ICP
+        </Button>
+      </div>
+
+      {picked.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+          <span className="text-sm tabular-nums">{picked.length} selected</span>
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" disabled={!toAdd.length || !!busy} onClick={() => void addLeads()}>
+              <UserPlus /> {busy === "add" ? "Adding…" : `Add ${toAdd.length} as leads`}
+            </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={busy || picked.length > MAX_REVEAL}
-              title={picked.length > MAX_REVEAL ? `Reveal up to ${MAX_REVEAL} at a time` : undefined}
-              onClick={() => setConfirming(true)}
+              disabled={!withLead.length || withLead.length > MAX_FETCH || !!busy}
+              title={withLead.length > MAX_FETCH ? `Fetch posts for up to ${MAX_FETCH} leads at a time` : undefined}
+              onClick={() => setFetchingPosts(true)}
             >
-              <MailCheck /> {busy ? "Revealing…" : `Reveal ${picked.length} ${picked.length === 1 ? "email" : "emails"}`}
+              <Newspaper /> Fetch posts for {withLead.length}
             </Button>
-          )}
-          <Button size="sm" disabled={!icps.data?.length} onClick={() => setSearching(true)}>
-            <UserSearch /> Search Apollo by ICP
-          </Button>
+            <Button
+              size="sm"
+              disabled={!toReveal.length || toReveal.length > MAX_REVEAL || !!busy}
+              title={toReveal.length > MAX_REVEAL ? `Reveal up to ${MAX_REVEAL} at a time` : undefined}
+              onClick={() => setConfirmingReveal(true)}
+            >
+              <MailCheck /> {busy === "reveal" ? "Revealing…" : `Reveal ${toReveal.length} ${toReveal.length === 1 ? "email" : "emails"}`}
+            </Button>
+          </div>
         </div>
-      </div>
-      {picked.length > MAX_REVEAL && (
-        <p className="text-sm text-destructive">Reveal up to {MAX_REVEAL} people at a time; {picked.length} are ticked.</p>
       )}
 
       {list.length === 0 ? (
         <EmptyState
           icon={UserSearch}
           title="Nobody found yet"
-          description="Search Apollo by one of your ICPs, or find people at a company on the Companies page."
+          description="Search Apollo by one of your ICPs, or find people at a company (Apollo or LinkedIn) on the Companies page."
           action={
             <div className="flex flex-wrap justify-center gap-2">
               <Button disabled={!icps.data?.length} onClick={() => setSearching(true)}>
@@ -192,13 +254,12 @@ function PeopleList({ wsId }: { wsId: string }) {
               <TableRow>
                 <TableHead className="w-10">
                   <Checkbox
-                    aria-label="Select all not yet revealed"
+                    aria-label="Select all shown"
                     checked={allChecked}
-                    disabled={revealable.length === 0}
                     onCheckedChange={(v) =>
                       setSelected((set) => {
                         const next = new Set(set)
-                        revealable.forEach((s) => (v === true ? next.add(s.id) : next.delete(s.id)))
+                        visible.forEach((s) => (v === true ? next.add(s.id) : next.delete(s.id)))
                         return next
                       })
                     }
@@ -208,19 +269,20 @@ function PeopleList({ wsId }: { wsId: string }) {
                 <TableHead>Company</TableHead>
                 <TableHead>Found by</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Lead</TableHead>
                 <TableHead>Found</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.map((s) => {
                 const cell = emailCell(s)
+                const leadPosts = s.leadId ? (postsByLead.get(s.leadId) ?? []) : []
                 return (
-                  <TableRow key={s.id} className={s.revealedAt ? undefined : "cursor-pointer"} onClick={() => !s.revealedAt && toggle(s.id, !selected.has(s.id))}>
+                  <TableRow key={s.id} className="cursor-pointer" onClick={() => toggle(s.id, !selected.has(s.id))}>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <Checkbox
                         aria-label={`Select ${s.firstName}`}
-                        checked={!!s.revealedAt || selected.has(s.id)}
-                        disabled={!!s.revealedAt}
+                        checked={selected.has(s.id)}
                         onCheckedChange={(v) => toggle(s.id, v === true)}
                       />
                     </TableCell>
@@ -232,10 +294,12 @@ function PeopleList({ wsId }: { wsId: string }) {
                     </TableCell>
                     <TableCell className="max-w-56 truncate">{company(s)}</TableCell>
                     <TableCell>
-                      {s.icpId ? (
+                      {s.source === "apify_linkedin" ? (
+                        <Pill tone="info">LinkedIn</Pill>
+                      ) : s.icpId ? (
                         <Pill>ICP: {icpName.get(s.icpId) ?? "deleted ICP"}</Pill>
                       ) : (
-                        <span className="text-[13px] text-muted-foreground">Company search</span>
+                        <span className="text-[13px] text-muted-foreground">Apollo, by company</span>
                       )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -256,6 +320,22 @@ function PeopleList({ wsId }: { wsId: string }) {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      {s.leadId ? (
+                        <div className="flex flex-col items-start gap-0.5">
+                          <Pill tone="positive">Lead</Pill>
+                          <button
+                            type="button"
+                            className="text-xs text-data hover:underline tabular-nums"
+                            onClick={() => setReading(s)}
+                          >
+                            {leadPosts.length ? `${leadPosts.length} ${leadPosts.length === 1 ? "post" : "posts"}` : "No posts yet"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[13px] text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground">{shortDate(s.foundAt)}</TableCell>
                   </TableRow>
                 )
@@ -269,19 +349,127 @@ function PeopleList({ wsId }: { wsId: string }) {
         <IcpSearchDialog
           workspaceId={wsId}
           icps={icps.data}
-          initialIcpId={icpFilter !== "all" && icpFilter !== "company" ? icpFilter : undefined}
+          initialIcpId={icps.data.some((i) => i.id === foundBy) ? foundBy : undefined}
           onClose={() => setSearching(false)}
           onFound={people.reload}
         />
       )}
+      {fetchingPosts && (
+        <FetchPostsDialog
+          wsId={wsId}
+          people={withLead}
+          onClose={() => setFetchingPosts(false)}
+          onDone={() => {
+            setSelected(new Set())
+            posts.reload()
+          }}
+        />
+      )}
+      {reading && (
+        <PostsSheet
+          name={`${reading.firstName} ${reading.lastName}`.trim()}
+          posts={reading.leadId ? (postsByLead.get(reading.leadId) ?? []) : []}
+          loading={posts.loading && !posts.data}
+          onClose={() => setReading(null)}
+        />
+      )}
       <ConfirmDialog
-        open={confirming}
-        onOpenChange={setConfirming}
-        title={`Reveal ${picked.length} ${picked.length === 1 ? "email" : "emails"}?`}
+        open={confirmingReveal}
+        onOpenChange={setConfirmingReveal}
+        title={`Reveal ${toReveal.length} ${toReveal.length === 1 ? "email" : "emails"}?`}
         description="This uses Apollo credits: about 1 per person whose email comes back, and none when Apollo has no match. Revealed people are added as leads, and are never charged for twice."
-        confirmLabel={`Reveal ${picked.length}`}
+        confirmLabel={`Reveal ${toReveal.length}`}
         onConfirm={() => void reveal()}
       />
     </>
+  )
+}
+
+/** Choose how many posts and how far back, see the most it can cost, then fetch. */
+function FetchPostsDialog({
+  wsId,
+  people,
+  onClose,
+  onDone,
+}: {
+  wsId: string
+  people: Stakeholder[]
+  onClose: () => void
+  onDone: () => void
+}) {
+  const [maxPosts, setMaxPosts] = useState("5")
+  const [days, setDays] = useState("60")
+  const [running, setRunning] = useState(false)
+  const n = Number(maxPosts)
+  const d = Number(days)
+  const bad = !(Number.isInteger(n) && n >= 1 && n <= 20) || !(Number.isInteger(d) && d >= 1 && d <= 365)
+  // Each lead can have a LinkedIn and an Instagram source.
+  const ceiling = people.length * n * 2 * COST_PER_POST
+
+  const run = async () => {
+    setRunning(true)
+    try {
+      const r = await fetchLeadPosts(wsId, { leadIds: people.map((s) => s.leadId!), maxPosts: n, maxAgeDays: d })
+      const found = r.results.reduce((sum, x) => sum + (x.linkedin ?? 0) + (x.instagram ?? 0), 0)
+      const fresh = r.results.reduce((sum, x) => sum + x.new, 0)
+      const noSource = r.results.filter((x) => x.linkedin === null && x.instagram === null).length
+      if (r.error) toast.error("Apify refused", { description: r.error })
+      else
+        toast.success(`${found} ${found === 1 ? "post" : "posts"} found, ${fresh} new`, {
+          description:
+            [r.costUsd ? `Apify charged ${formatUsd(r.costUsd)}.` : "", noSource ? `${noSource} had no LinkedIn or Instagram to read.` : ""]
+              .filter(Boolean)
+              .join(" ") || undefined,
+        })
+      onDone()
+      onClose()
+    } catch (e) {
+      toast.error("Couldn't fetch posts", { description: e instanceof Error ? e.message : undefined })
+      setRunning(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && !running && onClose()}>
+      <DialogContent className="sm:max-w-md!">
+        <DialogHeader>
+          <DialogTitle>
+            Fetch posts for {people.length} {people.length === 1 ? "lead" : "leads"}
+          </DialogTitle>
+          <DialogDescription>
+            Their LinkedIn posts, and Instagram posts from their own account or their company&apos;s (already found by
+            Lead Intel). Fetched through Apify, paid per post.
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          id="fetch-posts"
+          className="grid grid-cols-2 gap-4"
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (!bad) void run()
+          }}
+        >
+          <div className="space-y-1.5">
+            <Label htmlFor="posts-max">Posts per source</Label>
+            <Input id="posts-max" type="number" inputMode="numeric" value={maxPosts} onChange={(e) => setMaxPosts(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="posts-days">From the last (days)</Label>
+            <Input id="posts-days" type="number" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value)} />
+          </div>
+          <p className={bad ? "col-span-2 text-xs text-destructive" : "col-span-2 text-xs text-muted-foreground tabular-nums"}>
+            {bad ? "Posts: 1 to 20. Days: 1 to 365." : `At most about ${formatUsd(ceiling)}, if every lead has both sources and that many posts.`}
+          </p>
+        </form>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={running}>
+            Cancel
+          </Button>
+          <Button type="submit" form="fetch-posts" disabled={running || bad}>
+            <Newspaper /> {running ? "Fetching… this can take a minute" : "Fetch posts"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

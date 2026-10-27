@@ -273,3 +273,41 @@ export type IcpCreate = Pick<
 >
 
 export const createIcp = (body: IcpCreate) => api<ApiIcp>("/icps", { method: "POST", body })
+
+// ---------- LinkedIn people and posts (Apify) ----------
+
+export const searchLinkedIn = (workspaceId: string, body: { companyIds: string[]; titles: string[]; maxPerCompany: number }) =>
+  api<StakeholderSearchResult & { costUsd: number | null }>("/stakeholders/search-linkedin", {
+    workspaceId,
+    method: "POST",
+    body,
+  })
+
+export const addAsLeads = (workspaceId: string, stakeholderIds: string[]) =>
+  api<{ added: number; linkedExisting: number; skipped: number }>("/stakeholders/add-as-leads", {
+    workspaceId,
+    method: "POST",
+    body: { stakeholderIds },
+  })
+
+export interface ApiPost {
+  id: string
+  leadId: string
+  source: "linkedin" | "instagram" | "facebook" | "website"
+  url: string
+  postedAt: string | null
+  text: string
+  mediaType: string
+  isRepost: boolean
+  fetchedAt: string
+}
+
+export const fetchPosts = (workspaceId: string, leadId?: string) =>
+  api<ApiPost[]>(leadId ? `/posts?leadId=${leadId}` : "/posts", { workspaceId })
+
+export const fetchLeadPosts = (workspaceId: string, body: { leadIds: string[]; maxPosts: number; maxAgeDays: number }) =>
+  api<{
+    results: { leadId: string; linkedin: number | null; instagram: number | null; new: number }[]
+    costUsd: number | null
+    error: string | null
+  }>("/posts/fetch", { workspaceId, method: "POST", body })
