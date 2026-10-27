@@ -85,3 +85,10 @@ export function firstLine(body: string): string {
   const content = /^(hi|hey|hello|dear)\b/i.test(paras[0] ?? "") ? paras[1] : paras[0]
   return (content ?? "").split(/(?<=[.?])\s/)[0] ?? ""
 }
+
+/** 4210 → "4.2k", 21400 → "21k". */
+export function compactCount(n: number): string {
+  if (n < 1000) return String(n)
+  const k = n / 1000
+  return `${k < 10 ? k.toFixed(1).replace(/\.0$/, "") : Math.round(k)}k`
+}

@@ -1,115 +1,82 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { toast } from "sonner";
-import { UserAvatar } from "@/components/users/user-avatar";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { ROLE_LABEL } from "@/lib/roles";
-import { useStore } from "@/lib/store";
-import type { Workspace } from "@/lib/types";
+import { useState } from "react"
+import { toast } from "sonner"
+import { UserAvatar } from "@/components/users/user-avatar"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { ApiError } from "@/lib/api"
+import { ROLE_LABEL } from "@/lib/roles"
+import { useStore } from "@/lib/store"
+import type { Workspace } from "@/lib/types"
 
-/** Create a workspace and choose who's in it, or rename an existing one. */
+/** Create a workspace and choose who's in it, or rename an existing one. Saved in the backend. */
 export function WorkspaceDialog({
   workspace,
   onClose,
   onCreated,
 }: {
-  workspace?: Workspace;
-  onClose: () => void;
-  onCreated?: (ws: Workspace) => void;
+  workspace?: Workspace
+  onClose: () => void
+  onCreated?: (ws: Workspace) => void
 }) {
-  const {
-    users,
-    workspaces,
-    createWorkspace,
-    updateWorkspace,
-    setWorkspaceMembers,
-  } = useStore();
-  const [name, setName] = useState(workspace?.name ?? "");
-  const [description, setDescription] = useState(workspace?.description ?? "");
+  const { users, workspaces, createWorkspace, updateWorkspace, setWorkspaceMembers } = useStore()
+  const [name, setName] = useState(workspace?.name ?? "")
+  const [description, setDescription] = useState(workspace?.description ?? "")
   const [memberIds, setMemberIds] = useState<string[]>(() =>
-    workspace
-      ? users
-          .filter(
-            (u) => u.role !== "admin" && u.workspaceIds.includes(workspace.id),
-          )
-          .map((u) => u.id)
-      : [],
-  );
-  const [touched, setTouched] = useState(false);
+    workspace ? users.filter((u) => u.role !== "admin" && u.workspaceIds.includes(workspace.id)).map((u) => u.id) : [],
+  )
+  const [touched, setTouched] = useState(false)
+  const [saving, setSaving] = useState(false)
+  // The backend's reason when it refuses, e.g. a name someone else just took.
+  const [serverError, setServerError] = useState("")
 
-  const taken = workspaces.some(
-    (w) =>
-      w.id !== workspace?.id &&
-      w.name.toLowerCase() === name.trim().toLowerCase(),
-  );
-  const error = !name.trim()
-    ? "Give the workspace a name"
-    : taken
-      ? "A workspace with this name already exists"
-      : "";
-  const candidates = users.filter(
-    (u) => u.role !== "admin" && u.status !== "deactivated",
-  );
+  const taken = workspaces.some((w) => w.id !== workspace?.id && w.name.toLowerCase() === name.trim().toLowerCase())
+  const error = !name.trim() ? "Give the workspace a name" : taken ? "A workspace with this name already exists" : ""
+  const candidates = users.filter((u) => u.role !== "admin" && u.status !== "deactivated")
   // Unticked users for whom this is their only workspace.
   const losingAll = workspace
-    ? candidates.filter(
-        (u) =>
-          !memberIds.includes(u.id) &&
-          u.workspaceIds.length === 1 &&
-          u.workspaceIds[0] === workspace.id,
-      )
-    : [];
-  const adminCount = users.filter(
-    (u) => u.role === "admin" && u.status !== "deactivated",
-  ).length;
+    ? candidates.filter((u) => !memberIds.includes(u.id) && u.workspaceIds.length === 1 && u.workspaceIds[0] === workspace.id)
+    : []
+  const adminCount = users.filter((u) => u.role === "admin" && u.status !== "deactivated").length
 
-  const submit = () => {
+  const submit = async () => {
     if (error) {
-      setTouched(true);
-      return;
+      setTouched(true)
+      return
     }
-    if (workspace) {
-      updateWorkspace(workspace.id, {
-        name: name.trim(),
-        description: description.trim(),
-      });
-      // Deactivated users aren't listed, so they keep whatever access they had.
-      const keptDeactivated = users
-        .filter(
-          (u) =>
-            u.status === "deactivated" && u.workspaceIds.includes(workspace.id),
-        )
-        .map((u) => u.id);
-      setWorkspaceMembers(workspace.id, [...memberIds, ...keptDeactivated]);
-      toast.success(`Saved ${name.trim()}`);
-    } else {
-      const ws = createWorkspace({ name, description, memberIds });
-      toast.success(`Created ${ws.name}`);
-      onCreated?.(ws);
+    setSaving(true)
+    setServerError("")
+    try {
+      if (workspace) {
+        await updateWorkspace(workspace.id, { name: name.trim(), description: description.trim() })
+        // Deactivated users aren't listed, so they keep whatever access they had.
+        const keptDeactivated = users
+          .filter((u) => u.status === "deactivated" && u.workspaceIds.includes(workspace.id))
+          .map((u) => u.id)
+        setWorkspaceMembers(workspace.id, [...memberIds, ...keptDeactivated])
+        toast.success(`Saved ${name.trim()}`)
+      } else {
+        const ws = await createWorkspace({ name, description, memberIds })
+        toast.success(`Created ${ws.name}`)
+        onCreated?.(ws)
+      }
+      onClose()
+    } catch (e) {
+      setServerError(e instanceof ApiError ? e.message : "Couldn't save. Try again.")
+      setSaving(false)
     }
-    onClose();
-  };
+  }
 
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()}>
+    <Dialog open onOpenChange={(o) => !o && !saving && onClose()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg!">
         <DialogHeader>
-          <DialogTitle>
-            {workspace ? `Edit ${workspace.name}` : "Create workspace"}
-          </DialogTitle>
+          <DialogTitle>{workspace ? `Edit ${workspace.name}` : "Create workspace"}</DialogTitle>
           <DialogDescription>
             {workspace
               ? "Rename it, or change which Sales and Management users can open it."
@@ -120,8 +87,8 @@ export function WorkspaceDialog({
           id="workspace-form"
           className="space-y-5"
           onSubmit={(e) => {
-            e.preventDefault();
-            submit();
+            e.preventDefault()
+            void submit()
           }}
         >
           <div className="space-y-1.5">
@@ -133,25 +100,18 @@ export function WorkspaceDialog({
               placeholder="e.g. Agency clients"
               aria-invalid={(touched && !!error) || undefined}
               onBlur={() => setTouched(true)}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => {
+                setName(e.target.value)
+                setServerError("")
+              }}
             />
-            {touched && error && (
-              <p className="text-xs text-destructive">{error}</p>
-            )}
+            {touched && error && <p className="text-xs text-destructive">{error}</p>}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ws-description">
-              Description{" "}
-              <span className="font-normal text-muted-foreground">
-                (optional)
-              </span>
+              Description <span className="font-normal text-muted-foreground">(optional)</span>
             </Label>
-            <Textarea
-              id="ws-description"
-              rows={2}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+            <Textarea id="ws-description" rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
 
           <fieldset className="space-y-1.5">
@@ -163,53 +123,40 @@ export function WorkspaceDialog({
             {candidates.length ? (
               <div className="max-h-56 divide-y divide-rule overflow-y-auto rounded-md border">
                 {candidates.map((u) => (
-                  <label
-                    key={u.id}
-                    className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-muted/50"
-                  >
+                  <label key={u.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-muted/50">
                     <Checkbox
                       checked={memberIds.includes(u.id)}
                       onCheckedChange={(v) =>
-                        setMemberIds((ids) =>
-                          v === true
-                            ? [...ids, u.id]
-                            : ids.filter((id) => id !== u.id),
-                        )
+                        setMemberIds((ids) => (v === true ? [...ids, u.id] : ids.filter((id) => id !== u.id)))
                       }
                     />
                     <UserAvatar name={u.name} className="size-6 text-[10px]" />
-                    <span className="min-w-0 flex-1 truncate text-sm">
-                      {u.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {ROLE_LABEL[u.role]}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{u.name}</span>
+                    <span className="text-xs text-muted-foreground">{ROLE_LABEL[u.role]}</span>
                   </label>
                 ))}
               </div>
             ) : (
-              <p className="text-[13px] text-muted-foreground">
-                No other users yet. Invite them from the Users tab.
-              </p>
+              <p className="text-[13px] text-muted-foreground">No other users yet. Invite them from the Users tab.</p>
             )}
             {losingAll.length > 0 && (
               <p className="text-[13px] text-warning">
-                {losingAll.map((u) => u.name).join(", ")}{" "}
-                {losingAll.length === 1 ? "has" : "have"} no other workspace and
-                won&apos;t be able to open anything.
+                {losingAll.map((u) => u.name).join(", ")} {losingAll.length === 1 ? "has" : "have"} no other workspace
+                and won&apos;t be able to open anything.
               </p>
             )}
           </fieldset>
+          {serverError && <p className="text-sm text-destructive">{serverError}</p>}
         </form>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form="workspace-form">
-            {workspace ? "Save changes" : "Create workspace"}
+          <Button type="submit" form="workspace-form" disabled={saving}>
+            {saving ? "Saving…" : workspace ? "Save changes" : "Create workspace"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
+  )
 }

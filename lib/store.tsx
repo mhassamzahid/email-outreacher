@@ -1,7 +1,8 @@
 "use client"
 
-import { createContext, useContext, useState, type Dispatch, type ReactNode, type SetStateAction } from "react"
+import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react"
 import { toast } from "sonner"
+import * as api from "./api"
 import * as mock from "./mock-data"
 import { runEnrichment, runGeneration, runScoring, uid } from "./mock-actions"
 import { COST_PER_SCORE, autoSentToday, sendDecision } from "./scoring"
@@ -93,7 +94,11 @@ interface Store {
   setDefaultTemplate: (templateId: string) => void
 
   users: User[]
+  /** From the backend. Empty until loaded; see workspacesStatus. */
   workspaces: Workspace[]
+  workspacesStatus: "loading" | "ready" | "error"
+  workspacesError: string | null
+  reloadWorkspaces: () => void
   currentUserId: string
   currentWorkspaceId: string
   setCurrentWorkspace: (id: string) => void
@@ -101,15 +106,18 @@ interface Store {
   inviteUser: (input: Pick<User, "name" | "email" | "role" | "workspaceIds">) => User
   updateUser: (id: string, patch: Partial<Pick<User, "name" | "role" | "workspaceIds" | "status">>) => void
   removeUser: (id: string) => void
-  createWorkspace: (input: { name: string; description: string; memberIds: string[] }) => Workspace
-  updateWorkspace: (id: string, patch: Partial<Pick<Workspace, "name" | "description">>) => void
+  /** Saved in the backend. Rejects with the backend's reason (e.g. the name is taken). */
+  createWorkspace: (input: { name: string; description: string; memberIds: string[] }) => Promise<Workspace>
+  updateWorkspace: (id: string, patch: Partial<Pick<Workspace, "name" | "description">>) => Promise<void>
   /** Sets which non-admins can open the workspace. Admins always can, so they're left alone. */
   setWorkspaceMembers: (id: string, memberIds: string[]) => void
-  /** Removes the workspace and takes it off every user. Callers check it is not the current one. */
-  deleteWorkspace: (id: string) => void
+  /** Deletes it in the backend and takes it off every user. Callers check it is not the current one. */
+  deleteWorkspace: (id: string) => Promise<void>
 }
 
 const StoreContext = createContext<Store | null>(null)
+
+const CURRENT_WORKSPACE_KEY = "eo.currentWorkspaceId"
 
 const emptyProgress = (): Record<Source, SourceProgress> => ({
   linkedin: { done: 0, found: 0, empty: 0, failed: 0 },
@@ -137,8 +145,53 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [enrichJobs, setEnrichJobs] = useState<Record<string, EnrichmentJob>>({})
   const [genJobs, setGenJobs] = useState<Record<string, GenerationJob>>({})
   const [users, setUsers] = useState(mock.users)
-  const [workspaces, setWorkspaces] = useState(mock.workspaces)
-  const [currentWorkspaceId, setCurrentWorkspace] = useState(mock.workspaces[0].id)
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+  const [workspacesStatus, setWorkspacesStatus] = useState<Store["workspacesStatus"]>("loading")
+  const [workspacesError, setWorkspacesError] = useState<string | null>(null)
+  const [workspacesTick, setWorkspacesTick] = useState(0)
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState("")
+
+  // The chosen workspace is remembered per browser; it falls back to the first one.
+  const setCurrentWorkspace = useCallback((id: string) => {
+    setCurrentWorkspaceId(id)
+    try {
+      localStorage.setItem(CURRENT_WORKSPACE_KEY, id)
+    } catch {
+      // Storage can be unavailable (private windows); the choice just won't survive a reload.
+    }
+  }, [])
+
+  useEffect(() => {
+    let live = true
+    api
+      .fetchWorkspaces()
+      .then((list) => {
+        if (!live) return
+        setWorkspaces(list)
+        setWorkspacesStatus("ready")
+        setWorkspacesError(null)
+        let saved: string | null = null
+        try {
+          saved = localStorage.getItem(CURRENT_WORKSPACE_KEY)
+        } catch {}
+        setCurrentWorkspaceId((current) =>
+          list.some((w) => w.id === current) ? current : list.find((w) => w.id === saved)?.id ?? list[0]?.id ?? "",
+        )
+      })
+      .catch((e: unknown) => {
+        if (!live) return
+        setWorkspacesStatus("error")
+        setWorkspacesError(e instanceof Error ? e.message : "Couldn't load workspaces.")
+      })
+    return () => {
+      live = false
+    }
+  }, [workspacesTick])
+
+  const reloadWorkspaces = useCallback(() => {
+    setWorkspacesStatus("loading")
+    setWorkspacesTick((t) => t + 1)
+  }, [])
 
   const addSpend = (usd: number) =>
     setSettings((s) => ({ ...s, spentThisMonthUsd: Math.round((s.spentThisMonthUsd + usd) * 10000) / 10000 }))
@@ -396,8 +449,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const removeUser: Store["removeUser"] = (id) => setUsers((list) => list.filter((u) => u.id !== id))
 
-  const createWorkspace: Store["createWorkspace"] = ({ name, description, memberIds }) => {
-    const ws: Workspace = { id: uid("ws"), name: name.trim(), description: description.trim(), createdAt: new Date().toISOString() }
+  const createWorkspace: Store["createWorkspace"] = async ({ name, description, memberIds }) => {
+    const ws = await api.createWorkspace({ name: name.trim(), description: description.trim() })
     setWorkspaces((list) => [...list, ws])
     // Admins see every workspace; everyone else only the ones they were added to.
     setUsers((list) =>
@@ -406,8 +459,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return ws
   }
 
-  const updateWorkspace: Store["updateWorkspace"] = (id, patch) =>
-    setWorkspaces((list) => list.map((w) => (w.id === id ? { ...w, ...patch } : w)))
+  const updateWorkspace: Store["updateWorkspace"] = async (id, patch) => {
+    const ws = await api.updateWorkspace(id, patch)
+    setWorkspaces((list) => list.map((w) => (w.id === id ? ws : w)))
+  }
 
   const setWorkspaceMembers: Store["setWorkspaceMembers"] = (id, memberIds) =>
     setUsers((list) =>
@@ -418,7 +473,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }),
     )
 
-  const deleteWorkspace: Store["deleteWorkspace"] = (id) => {
+  const deleteWorkspace: Store["deleteWorkspace"] = async (id) => {
+    await api.deleteWorkspace(id)
     setWorkspaces((list) => list.filter((w) => w.id !== id))
     setUsers((list) => list.map((u) => ({ ...u, workspaceIds: u.workspaceIds.filter((w) => w !== id) })))
   }
@@ -457,6 +513,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setDefaultTemplate,
         users,
         workspaces,
+        workspacesStatus,
+        workspacesError,
+        reloadWorkspaces,
         currentUserId: mock.CURRENT_USER_ID,
         currentWorkspaceId,
         setCurrentWorkspace,

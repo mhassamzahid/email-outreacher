@@ -188,3 +188,35 @@ export interface Workspace {
   description: string
   createdAt: string
 }
+
+/** An ICP as Lead Intel defines it. Read-only here. */
+export interface LeadIntelIcp {
+  id: string
+  name: string
+  industry: string
+}
+
+
+/** A business from Lead Intel, in the shape the backend's /companies endpoint returns. */
+export interface Company {
+  id: string
+  name: string
+  city: string | null
+  state: string | null
+  icpId: string | null
+  icpName: string | null
+  /** 1 (best) to 4; null when Lead Intel couldn't score it. */
+  tier: number | null
+  problemScore: number | null
+  /** Lead Intel's verdict, e.g. has_website, social_only, no_website, dead, unclear. */
+  websiteStatus: string | null
+  websiteUrl: string | null
+  domain: string | null
+  instagram: {
+    handle: string | null
+    url: string | null
+    followers: number | null
+    category: string | null
+    bio: string | null
+  }
+}

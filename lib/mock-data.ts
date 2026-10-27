@@ -11,7 +11,6 @@ import type {
   Settings,
   Source,
   User,
-  Workspace,
 } from "./types"
 
 // ---------------------------------------------------------------------------
@@ -968,21 +967,18 @@ export const settings: Settings = {
 // Users and workspaces
 // ---------------------------------------------------------------------------
 
-export const workspaces: Workspace[] = [
-  { id: "ws_aheadtech", name: "AheadTech360", description: "Main outbound for local service businesses.", createdAt: daysAgo(210) },
-  { id: "ws_agency", name: "Agency clients", description: "Campaigns run on behalf of agency partners.", createdAt: daysAgo(96) },
-  { id: "ws_eu", name: "EU expansion", description: "Pilot outreach to UK and Ireland.", createdAt: daysAgo(12) },
-]
+/** The AheadTech360 row in outreach.eo_workspaces. Sample users belong to it until users come from the backend. */
+export const SEED_WORKSPACE_ID = process.env.NEXT_PUBLIC_WORKSPACE_ID ?? ""
 
 export const CURRENT_USER_ID = "usr_alex"
 
 export const users: User[] = [
-  { id: "usr_alex", name: "Alex Morgan", email: "alex@aheadtech360.com", role: "admin", workspaceIds: ["ws_aheadtech", "ws_agency", "ws_eu"], status: "active", lastActiveAt: daysAgo(0, 1), createdAt: daysAgo(210) },
-  { id: "usr_jordan", name: "Jordan Lee", email: "jordan@aheadtech360.com", role: "admin", workspaceIds: ["ws_aheadtech", "ws_agency"], status: "active", lastActiveAt: daysAgo(2), createdAt: daysAgo(180) },
-  { id: "usr_priya", name: "Priya Shah", email: "priya@aheadtech360.com", role: "management", workspaceIds: ["ws_aheadtech", "ws_eu"], status: "active", lastActiveAt: daysAgo(0, 5), createdAt: daysAgo(150) },
-  { id: "usr_daniel", name: "Daniel Reyes", email: "daniel@aheadtech360.com", role: "management", workspaceIds: ["ws_agency"], status: "active", lastActiveAt: daysAgo(4), createdAt: daysAgo(90) },
-  { id: "usr_omar", name: "Omar Farooq", email: "omar@aheadtech360.com", role: "sales", workspaceIds: ["ws_aheadtech"], status: "active", lastActiveAt: daysAgo(0, 3), createdAt: daysAgo(60) },
-  { id: "usr_chloe", name: "Chloe Bennett", email: "chloe@aheadtech360.com", role: "sales", workspaceIds: ["ws_aheadtech", "ws_agency"], status: "active", lastActiveAt: daysAgo(1), createdAt: daysAgo(45) },
-  { id: "usr_tom", name: "Tom Becker", email: "tom@aheadtech360.com", role: "sales", workspaceIds: ["ws_eu"], status: "invited", lastActiveAt: null, createdAt: daysAgo(3) },
-  { id: "usr_lina", name: "Lina Haddad", email: "lina@aheadtech360.com", role: "sales", workspaceIds: ["ws_aheadtech"], status: "deactivated", lastActiveAt: daysAgo(38), createdAt: daysAgo(120) },
+  { id: "usr_alex", name: "Alex Morgan", email: "alex@aheadtech360.com", role: "admin", workspaceIds: [SEED_WORKSPACE_ID], status: "active", lastActiveAt: daysAgo(0, 1), createdAt: daysAgo(210) },
+  { id: "usr_jordan", name: "Jordan Lee", email: "jordan@aheadtech360.com", role: "admin", workspaceIds: [SEED_WORKSPACE_ID], status: "active", lastActiveAt: daysAgo(2), createdAt: daysAgo(180) },
+  { id: "usr_priya", name: "Priya Shah", email: "priya@aheadtech360.com", role: "management", workspaceIds: [SEED_WORKSPACE_ID], status: "active", lastActiveAt: daysAgo(0, 5), createdAt: daysAgo(150) },
+  { id: "usr_daniel", name: "Daniel Reyes", email: "daniel@aheadtech360.com", role: "management", workspaceIds: [SEED_WORKSPACE_ID], status: "active", lastActiveAt: daysAgo(4), createdAt: daysAgo(90) },
+  { id: "usr_omar", name: "Omar Farooq", email: "omar@aheadtech360.com", role: "sales", workspaceIds: [SEED_WORKSPACE_ID], status: "active", lastActiveAt: daysAgo(0, 3), createdAt: daysAgo(60) },
+  { id: "usr_chloe", name: "Chloe Bennett", email: "chloe@aheadtech360.com", role: "sales", workspaceIds: [SEED_WORKSPACE_ID], status: "active", lastActiveAt: daysAgo(1), createdAt: daysAgo(45) },
+  { id: "usr_tom", name: "Tom Becker", email: "tom@aheadtech360.com", role: "sales", workspaceIds: [SEED_WORKSPACE_ID], status: "invited", lastActiveAt: null, createdAt: daysAgo(3) },
+  { id: "usr_lina", name: "Lina Haddad", email: "lina@aheadtech360.com", role: "sales", workspaceIds: [SEED_WORKSPACE_ID], status: "deactivated", lastActiveAt: daysAgo(38), createdAt: daysAgo(120) },
 ]

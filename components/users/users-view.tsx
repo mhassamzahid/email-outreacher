@@ -16,6 +16,7 @@ import {
   Users as UsersIcon,
 } from "lucide-react"
 import { toast } from "sonner"
+import { BackendError } from "@/components/companies/backend-state"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
@@ -357,8 +358,16 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
 }
 
 function WorkspacesTable({ onCreate }: { onCreate: () => void }) {
-  const { users, workspaces, currentWorkspaceId, setCurrentWorkspace, deleteWorkspace } = useStore()
-  const loading = useMockLoading()
+  const {
+    users,
+    workspaces,
+    workspacesStatus,
+    workspacesError,
+    reloadWorkspaces,
+    currentWorkspaceId,
+    setCurrentWorkspace,
+    deleteWorkspace,
+  } = useStore()
   const [editing, setEditing] = useState<Workspace | null>(null)
   const [deleting, setDeleting] = useState<Workspace | null>(null)
 
@@ -369,7 +378,8 @@ function WorkspacesTable({ onCreate }: { onCreate: () => void }) {
   const lockReason = (w: Workspace) =>
     w.id === currentWorkspaceId ? "You're in it. Switch to another workspace first." : workspaces.length === 1 ? "It's the only workspace." : ""
 
-  if (loading) return <TableSkeleton rows={3} />
+  if (workspacesStatus === "error") return <BackendError message={workspacesError ?? ""} onRetry={reloadWorkspaces} />
+  if (workspacesStatus === "loading") return <TableSkeleton rows={3} />
   if (!workspaces.length)
     return (
       <EmptyState
@@ -485,9 +495,12 @@ function WorkspacesTable({ onCreate }: { onCreate: () => void }) {
         confirmLabel="Delete workspace"
         onConfirm={() => {
           if (!deleting) return
-          deleteWorkspace(deleting.id)
-          toast.success(`Deleted ${deleting.name}`)
+          const target = deleting
           setDeleting(null)
+          deleteWorkspace(target.id).then(
+            () => toast.success(`Deleted ${target.name}`),
+            (e: unknown) => toast.error(`Couldn't delete ${target.name}`, { description: e instanceof Error ? e.message : undefined }),
+          )
         }}
       />
     </>

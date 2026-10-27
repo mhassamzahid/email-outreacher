@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Check, ChevronsUpDown, FileText, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, FileText, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -55,6 +55,7 @@ export function AppSidebar() {
 
   const nav = [
     { href: "/icps", label: "ICPs", icon: Target },
+    { href: "/companies", label: "Companies", icon: Building2 },
     { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/prompts", label: "Prompts", icon: FileText },
@@ -134,11 +135,13 @@ export function AppSidebar() {
 
 /** The current workspace; opens a menu to switch to another or, for admins, create one. */
 function WorkspaceSwitcher({ isAdmin }: { isAdmin: boolean }) {
-  const { users, workspaces, currentUserId, currentWorkspaceId, setCurrentWorkspace } = useStore()
+  const { users, workspaces, workspacesStatus, currentUserId, currentWorkspaceId, setCurrentWorkspace } = useStore()
   const [creating, setCreating] = useState(false)
   const me = users.find((u) => u.id === currentUserId)
   const mine = workspaces.filter((w) => isAdmin || me?.workspaceIds.includes(w.id))
   const current = workspaces.find((w) => w.id === currentWorkspaceId)
+  const label =
+    current?.name ?? (workspacesStatus === "loading" ? "Loading…" : workspacesStatus === "error" ? "Backend offline" : "None yet")
 
   const switchTo = (id: string, name: string) => {
     setCurrentWorkspace(id)
@@ -151,10 +154,10 @@ function WorkspaceSwitcher({ isAdmin }: { isAdmin: boolean }) {
         <DropdownMenuTrigger
           className="sidebar-reveal flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] whitespace-nowrap outline-none hover:bg-sidebar-accent focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:hidden"
           style={{ "--i": 1 } as CSSProperties}
-          aria-label={`Workspace: ${current?.name}. Switch workspace`}
+          aria-label={`Workspace: ${label}. Switch workspace`}
         >
           <span className="text-muted-foreground">Workspace</span>
-          <span className="ml-auto truncate font-medium text-foreground">{current?.name}</span>
+          <span className={cn("ml-auto truncate font-medium", current ? "text-foreground" : "text-muted-foreground")}>{label}</span>
           <ChevronsUpDown className="size-3.5 flex-none text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-56">
