@@ -3,25 +3,29 @@
 import { useState } from "react"
 import { Loader2, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { formatUsd, fullName } from "@/lib/format"
 import { renderPrompt, runPromptTest, type PromptTestResult } from "@/lib/mock-actions"
 import { chooseHookItem } from "@/lib/mock-data"
-import { icpsUsingTemplate } from "@/lib/selectors"
+import { generationByLead, icpsUsingTemplate } from "@/lib/selectors"
 import { useStore, type VersionDraft } from "@/lib/store"
 import type { HookContext } from "@/lib/templating"
 import type { PromptKind, PromptTemplate } from "@/lib/types"
 
 export function TestPanel({ template, draft }: { template: PromptTemplate; draft: VersionDraft }) {
-  const { icps, leads, items } = useStore()
+  const { icps, leads, items, generations } = useStore()
+  const genMap = generationByLead(generations)
   const kind: PromptKind = template.kind
   const [icpId, setIcpId] = useState(() => (icpsUsingTemplate(icps, template)[0] ?? icps[0])?.id ?? "")
   const icp = icps.find((i) => i.id === icpId)
   const icpLeads = leads.filter((l) => l.icpId === icpId)
-  const leadsWithItems = icpLeads.filter((l) => items.some((it) => it.leadId === l.id))
+  // Scoring needs a drafted email, so prefer leads that have one.
+  const leadsWithItems = icpLeads.filter((l) =>
+    kind === "score" ? genMap.has(l.id) : items.some((it) => it.leadId === l.id),
+  )
   const [leadId, setLeadId] = useState(() => leadsWithItems[0]?.id ?? icpLeads[0]?.id ?? "")
   const lead = icpLeads.find((l) => l.id === leadId)
   const [running, setRunning] = useState(false)
@@ -32,7 +36,7 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
   const leadItems = lead ? items.filter((it) => it.leadId === lead.id) : []
   const choice = lead ? chooseHookItem(icp.id, leadItems) : null
   const hook: HookContext | null =
-    kind === "email" && choice
+    (kind === "email" || kind === "score") && choice
       ? {
           text: choice.seed.hook,
           summary: choice.seed.summary,
@@ -42,14 +46,15 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
         }
       : null
 
-  const rendered = lead ? renderPrompt({ kind, version: draft, icp, lead, items: leadItems, hook }) : null
+  const generation = kind === "score" && lead ? (genMap.get(lead.id) ?? null) : null
+  const rendered = lead ? renderPrompt({ kind, version: draft, icp, lead, items: leadItems, hook, generation }) : null
 
   const run = async () => {
     if (!lead) return
     setRunning(true)
     setResult(null)
     try {
-      setResult(await runPromptTest({ kind, version: draft, icp, lead, items: leadItems, hook }))
+      setResult(await runPromptTest({ kind, version: draft, icp, lead, items: leadItems, hook, generation }))
     } finally {
       setRunning(false)
     }
@@ -117,6 +122,13 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
               Hook for this test: {hook ? `"${hook.text}"` : "none (the lead has no usable content)"}
             </p>
           )}
+          {kind === "score" && (
+            <p className="text-xs text-muted-foreground">
+              {generation
+                ? `Scoring this lead's current draft: "${generation.subject}"`
+                : "This lead has no draft yet, so the email variables render empty. Pick a lead that has one."}
+            </p>
+          )}
           {rendered ? (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">System</p>
@@ -135,14 +147,14 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
       </Card>
 
       <Card className="min-w-0">
-        <CardHeader className="flex flex-row items-start justify-between gap-2">
-          <div className="space-y-1">
-            <CardTitle>Output</CardTitle>
-            <CardDescription>Mock model response. Real calls arrive with the backend.</CardDescription>
-          </div>
-          <Button onClick={run} disabled={!lead || running}>
-            {running ? <Loader2 className="animate-spin" /> : <Play />} Run test
-          </Button>
+        <CardHeader>
+          <CardTitle>Output</CardTitle>
+          <CardDescription>Mock model response. Real calls arrive with the backend.</CardDescription>
+          <CardAction>
+            <Button onClick={run} disabled={!lead || running}>
+              {running ? <Loader2 className="animate-spin" /> : <Play />} Run test
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="space-y-3">
           {running ? (

@@ -39,6 +39,9 @@ type SidebarContextProps = {
   setOpenMobile: (open: boolean) => void
   isMobile: boolean
   toggleSidebar: () => void
+  /** Collapsed sidebar temporarily shown over the page (hover or keyboard focus). */
+  peek: boolean
+  setPeek: (peek: boolean) => void
 }
 
 const SidebarContext = React.createContext<SidebarContextProps | null>(null)
@@ -67,6 +70,13 @@ function SidebarProvider({
 }) {
   const isMobile = useIsMobile()
   const [openMobile, setOpenMobile] = React.useState(false)
+  const [peek, _setPeek] = React.useState(false)
+  // Entrance animations only run after the person has toggled or peeked, never on first paint.
+  const [motion, setMotion] = React.useState(false)
+  const setPeek = React.useCallback((value: boolean) => {
+    setMotion(true)
+    _setPeek(value)
+  }, [])
 
   // This is the internal state of the sidebar.
   // We use openProp and setOpenProp for control from outside the component.
@@ -75,6 +85,8 @@ function SidebarProvider({
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value
+      setMotion(true)
+      _setPeek(false)
       if (setOpenProp) {
         setOpenProp(openState)
       } else {
@@ -121,14 +133,17 @@ function SidebarProvider({
       openMobile,
       setOpenMobile,
       toggleSidebar,
+      peek,
+      setPeek,
     }),
-    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar]
+    [state, open, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar, peek, setPeek]
   )
 
   return (
     <SidebarContext.Provider value={contextValue}>
       <div
         data-slot="sidebar-wrapper"
+        data-sidebar-motion={motion ? "on" : undefined}
         style={
           {
             "--sidebar-width": SIDEBAR_WIDTH,
@@ -161,7 +176,18 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
 }) {
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, peek, setPeek } = useSidebar()
+  const peekTimer = React.useRef<number | undefined>(undefined)
+  React.useEffect(() => () => window.clearTimeout(peekTimer.current), [])
+
+  const collapsed = state === "collapsed"
+  const canPeek = collapsed && collapsible === "icon"
+  const peeking = canPeek && peek
+  // A short delay on the way in so a pointer passing over the rail does not open it.
+  const schedulePeek = (next: boolean, delay: number) => {
+    window.clearTimeout(peekTimer.current)
+    peekTimer.current = window.setTimeout(() => setPeek(next), delay)
+  }
 
   if (collapsible === "none") {
     return (
@@ -208,28 +234,48 @@ function Sidebar({
     <div
       className="group peer hidden text-sidebar-foreground md:block"
       data-state={state}
-      data-collapsible={state === "collapsed" ? collapsible : ""}
+      data-collapsible={collapsed && !peeking ? collapsible : ""}
+      data-peek={peeking ? "true" : undefined}
       data-variant={variant}
       data-side={side}
       data-slot="sidebar"
     >
-      {/* This is what handles the sidebar gap on desktop */}
+      {/* This is what handles the sidebar gap on desktop. It follows the pinned state only,
+          so a peeking sidebar floats over the page instead of pushing it. */}
       <div
         data-slot="sidebar-gap"
         className={cn(
           "relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
           "group-data-[collapsible=offcanvas]:w-0",
           "group-data-[side=right]:rotate-180",
-          variant === "floating" || variant === "inset"
-            ? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
-            : "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
+          collapsible === "icon" &&
+            (variant === "floating" || variant === "inset"
+              ? "group-data-[state=collapsed]:w-[calc(var(--sidebar-width-icon)+(--spacing(4)))]"
+              : "group-data-[state=collapsed]:w-(--sidebar-width-icon)")
         )}
       />
       <div
         data-slot="sidebar-container"
         data-side={side}
+        onMouseEnter={() => canPeek && schedulePeek(true, 120)}
+        onMouseLeave={() => canPeek && schedulePeek(false, 60)}
+        onFocus={(event) => {
+          // Keyboard focus opens the rail; a mouse click relies on hover so targets do not shift mid-click.
+          if (!canPeek || !(event.target as HTMLElement).matches(":focus-visible")) return
+          window.clearTimeout(peekTimer.current)
+          setPeek(true)
+        }}
+        onBlur={(event) => {
+          if (canPeek && !event.currentTarget.contains(event.relatedTarget as Node | null)) schedulePeek(false, 0)
+        }}
+        onKeyDown={(event) => {
+          if (peeking && event.key === "Escape") {
+            window.clearTimeout(peekTimer.current)
+            setPeek(false)
+          }
+        }}
         className={cn(
-          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex",
+          "fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear data-[side=left]:left-0 data-[side=left]:group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)] data-[side=right]:right-0 data-[side=right]:group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)] md:flex group-data-[peek=true]:z-30",
           // Adjust the padding for floating and inset variants.
           variant === "floating" || variant === "inset"
             ? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
@@ -241,7 +287,7 @@ function Sidebar({
         <div
           data-sidebar="sidebar"
           data-slot="sidebar-inner"
-          className="flex size-full flex-col bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border"
+          className="flex size-full flex-col overflow-hidden border border-transparent bg-sidebar group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1 group-data-[variant=floating]:ring-sidebar-border group-data-[peek=true]:rounded-[14px] group-data-[peek=true]:border-border group-data-[peek=true]:shadow-[0_16px_40px_-12px_rgb(0_0_0/0.22)]"
         >
           {children}
         </div>
@@ -306,7 +352,7 @@ function SidebarInset({ className, ...props }: React.ComponentProps<"main">) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
+        "relative flex w-full flex-1 flex-col bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:min-h-[calc(100svh-16px)] md:peer-data-[variant=inset]:rounded-[16px] md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2",
         className
       )}
       {...props}
@@ -501,7 +547,7 @@ function SidebarMenuButton({
   tooltip?: string | React.ComponentProps<typeof TooltipContent>
 } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const Comp = asChild ? Slot.Root : "button"
-  const { isMobile, state } = useSidebar()
+  const { isMobile, state, peek } = useSidebar()
 
   const button = (
     <Comp
@@ -530,7 +576,7 @@ function SidebarMenuButton({
       <TooltipContent
         side="right"
         align="center"
-        hidden={state !== "collapsed" || isMobile}
+        hidden={state !== "collapsed" || isMobile || peek}
         {...tooltip}
       />
     </Tooltip>

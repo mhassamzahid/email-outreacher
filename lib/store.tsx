@@ -3,8 +3,9 @@
 import { createContext, useContext, useState, type Dispatch, type ReactNode, type SetStateAction } from "react"
 import { toast } from "sonner"
 import * as mock from "./mock-data"
-import { runEnrichment, runGeneration, uid } from "./mock-actions"
-import { currentVersion, resolveTemplate } from "./selectors"
+import { runEnrichment, runGeneration, runScoring, uid } from "./mock-actions"
+import { COST_PER_SCORE, autoSentToday, sendDecision } from "./scoring"
+import { currentVersion, generationByLead, resolveScoringTemplate, resolveTemplate } from "./selectors"
 import type {
   EnrichmentItem,
   Generation,
@@ -12,6 +13,7 @@ import type {
   ICP,
   Lead,
   LeadStatus,
+  PromptKind,
   PromptTemplate,
   PromptVersion,
   Settings,
@@ -61,7 +63,7 @@ interface Store {
   enrichJobs: Record<string, EnrichmentJob>
   genJobs: Record<string, GenerationJob>
 
-  createIcp: (name: string, description: string) => ICP
+  createIcp: (input: Omit<ICP, "id" | "createdAt" | "updatedAt">) => ICP
   updateIcp: (id: string, patch: Partial<ICP>) => void
   addLeads: (leads: Lead[]) => void
   moveLeads: (ids: string[], icpId: string) => void
@@ -71,13 +73,21 @@ interface Store {
   startGeneration: (
     icpId: string,
     leadIds: string[],
-    opts?: { instruction?: string; excludeItemIds?: string[] },
+    opts?: { instruction?: string; excludeItemIds?: string[]; reviewOnly?: boolean },
   ) => Promise<void>
   updateGeneration: (id: string, patch: Partial<Generation>) => void
   setGenerationStatus: (ids: string[], status: GenerationStatus) => void
+  /** Marks approved emails as sent by a person (simulated: nothing leaves the app). */
+  sendGenerations: (ids: string[]) => void
+  /** Re-runs the scoring prompt for one lead's current draft. */
+  rescoreLead: (leadId: string) => Promise<void>
   saveVersion: (templateId: string, draft: VersionDraft, note: string) => PromptVersion
   restoreVersion: (versionId: string) => PromptVersion | undefined
   duplicateTemplate: (templateId: string) => PromptTemplate
+  /** New template whose v1 is the given prompt. */
+  createTemplate: (input: { name: string; kind: PromptKind; draft: VersionDraft; note: string }) => PromptTemplate
+  /** Removes a template and its versions. Callers check it is not the default or in use. */
+  deleteTemplate: (templateId: string) => void
   setDefaultTemplate: (templateId: string) => void
 }
 
@@ -94,6 +104,7 @@ const LEAD_STATUS_FOR: Record<GenerationStatus, LeadStatus> = {
   draft: "generated",
   edited: "generated",
   approved: "approved",
+  sent: "sent",
   skipped: "skipped",
 }
 
@@ -111,30 +122,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addSpend = (usd: number) =>
     setSettings((s) => ({ ...s, spentThisMonthUsd: Math.round((s.spentThisMonthUsd + usd) * 10000) / 10000 }))
 
-  const createIcp: Store["createIcp"] = (name, description) => {
+  const createIcp: Store["createIcp"] = (input) => {
     const now = new Date().toISOString()
-    const icp: ICP = {
-      id: uid("icp"),
-      name,
-      description,
-      titles: [],
-      industries: [],
-      companySize: "",
-      locations: [],
-      pains: "",
-      offer: "",
-      proof: "",
-      cta: "",
-      tone: "",
-      exampleEmail: "",
-      wordsToAvoid: "",
-      hookGuidance: "",
-      enabledSources: ["linkedin", "website"],
-      hookPromptId: null,
-      emailPromptId: null,
-      createdAt: now,
-      updatedAt: now,
-    }
+    const icp: ICP = { ...input, name: input.name.trim(), id: uid("icp"), createdAt: now, updatedAt: now }
     setIcps((list) => [...list, icp])
     return icp
   }
@@ -218,28 +208,48 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const icp = icps.find((i) => i.id === icpId)
     const hookVersion = icp && currentVersion(versions, resolveTemplate(templates, icp, "hook"))
     const emailVersion = icp && currentVersion(versions, resolveTemplate(templates, icp, "email"))
-    if (!icp || !hookVersion || !emailVersion || leadIds.length === 0) return
+    const scoreVersion = currentVersion(versions, resolveScoringTemplate(templates, settings.scoring))
+    if (!icp || !hookVersion || !emailVersion || !scoreVersion || leadIds.length === 0) return
     const targets = leads.filter((l) => leadIds.includes(l.id))
     setGenJobs((jobs) => ({
       ...jobs,
       [icpId]: { icpId, total: targets.length, completed: 0, costUsd: 0, running: true },
     }))
+    let sentToday = autoSentToday(generations)
+    let autoSent = 0
 
     await runGeneration(
-      { icp, leads: targets, items, hookVersion, emailVersion, ...opts },
-      (g) => {
-        setGenerations((list) => [...list.filter((x) => x.leadId !== g.leadId), g])
-        setLeads((list) => list.map((l) => (l.id === g.leadId ? { ...l, status: "generated" } : l)))
-        addSpend(g.costUsd)
+      { icp, leads: targets, items, hookVersion, emailVersion, scoreVersion, instruction: opts.instruction, excludeItemIds: opts.excludeItemIds },
+      (g, score) => {
+        // Regenerating from the review panel never auto-sends: a person is already looking at it.
+        const decision = opts.instruction || opts.excludeItemIds || opts.reviewOnly
+          ? { send: false }
+          : sendDecision(score.value, g.flags, settings.scoring, sentToday)
+        const final: Generation = decision.send ? { ...g, status: "sent", sentAt: new Date().toISOString(), sentBy: "auto" } : g
+        if (decision.send) {
+          sentToday++
+          autoSent++
+        }
+        setGenerations((list) => [...list.filter((x) => x.leadId !== g.leadId), final])
+        setLeads((list) =>
+          list.map((l) => (l.id === g.leadId ? { ...l, score, status: decision.send ? "sent" : "generated" } : l)),
+        )
+        const cost = g.costUsd + COST_PER_SCORE
+        addSpend(cost)
         setGenJobs((jobs) => {
           const job = jobs[icpId]
-          return job ? { ...jobs, [icpId]: { ...job, completed: job.completed + 1, costUsd: job.costUsd + g.costUsd } } : jobs
+          return job ? { ...jobs, [icpId]: { ...job, completed: job.completed + 1, costUsd: job.costUsd + cost } } : jobs
         })
       },
     )
 
     setGenJobs((jobs) => (jobs[icpId] ? { ...jobs, [icpId]: { ...jobs[icpId], running: false } } : jobs))
-    toast.success(`Generated ${targets.length} email${targets.length === 1 ? "" : "s"}, ready for review`)
+    const n = targets.length
+    toast.success(
+      autoSent
+        ? `Generated ${n} email${n === 1 ? "" : "s"}: ${autoSent} sent automatically, ${n - autoSent} waiting for review`
+        : `Generated and scored ${n} email${n === 1 ? "" : "s"}, ready for review`,
+    )
   }
 
   const updateGeneration: Store["updateGeneration"] = (id, patch) => {
@@ -253,6 +263,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const leadIds = generations.filter((g) => ids.includes(g.id)).map((g) => g.leadId)
     setGenerations((list) => list.map((g) => (ids.includes(g.id) ? { ...g, status } : g)))
     setLeads((list) => list.map((l) => (leadIds.includes(l.id) ? { ...l, status: LEAD_STATUS_FOR[status] } : l)))
+  }
+
+  const sendGenerations: Store["sendGenerations"] = (ids) => {
+    const now = new Date().toISOString()
+    const leadIds = generations.filter((g) => ids.includes(g.id)).map((g) => g.leadId)
+    setGenerations((list) =>
+      list.map((g) => (ids.includes(g.id) ? { ...g, status: "sent", sentAt: now, sentBy: "manual" } : g)),
+    )
+    setLeads((list) => list.map((l) => (leadIds.includes(l.id) ? { ...l, status: "sent" } : l)))
+  }
+
+  const rescoreLead: Store["rescoreLead"] = async (leadId) => {
+    const lead = leads.find((l) => l.id === leadId)
+    const icp = lead && icps.find((i) => i.id === lead.icpId)
+    const generation = generationByLead(generations).get(leadId)
+    const scoreVersion = currentVersion(versions, resolveScoringTemplate(templates, settings.scoring))
+    if (!lead || !icp || !generation || !scoreVersion) return
+    const score = await runScoring(icp, lead, generation, items, scoreVersion)
+    setLeads((list) => list.map((l) => (l.id === leadId ? { ...l, score } : l)))
+    addSpend(COST_PER_SCORE)
   }
 
   const saveVersion: Store["saveVersion"] = (templateId, draft, note) => {
@@ -299,6 +329,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return copy
   }
 
+  const createTemplate: Store["createTemplate"] = ({ name, kind, draft, note }) => {
+    const tpl: PromptTemplate = { id: uid("tpl"), name: name.trim(), kind, isDefault: false, currentVersionId: "" }
+    const version: PromptVersion = {
+      id: uid("pv"),
+      templateId: tpl.id,
+      version: 1,
+      ...draft,
+      note,
+      createdAt: new Date().toISOString(),
+    }
+    tpl.currentVersionId = version.id
+    setTemplates((list) => [...list, tpl])
+    setVersions((list) => [...list, version])
+    return tpl
+  }
+
+  const deleteTemplate: Store["deleteTemplate"] = (templateId) => {
+    setTemplates((list) => list.filter((t) => t.id !== templateId))
+    setVersions((list) => list.filter((v) => v.templateId !== templateId))
+  }
+
   const setDefaultTemplate: Store["setDefaultTemplate"] = (templateId) => {
     const tpl = templates.find((t) => t.id === templateId)
     if (!tpl) return
@@ -329,9 +380,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         startGeneration,
         updateGeneration,
         setGenerationStatus,
+        sendGenerations,
+        rescoreLead,
         saveVersion,
         restoreVersion,
         duplicateTemplate,
+        createTemplate,
+        deleteTemplate,
         setDefaultTemplate,
       }}
     >

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { ArrowRightLeft, Search, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
+import { AddLeadsMenu } from "@/components/add-leads"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { LeadsTable } from "@/components/leads-table"
@@ -61,8 +62,12 @@ export default function LeadsPage() {
 
   return (
     <>
-      <PageHeader title="Leads" description="Every lead across all ICPs" />
-      <div className="space-y-4 p-4 md:p-6">
+      <PageHeader
+        title="Leads"
+        description={`${leads.length} leads across ${icps.length} ICPs`}
+        actions={<AddLeadsMenu variant="default" />}
+      />
+      <div className="space-y-4 px-4 pb-10 md:px-8">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -128,7 +133,12 @@ export default function LeadsPage() {
         {loading ? (
           <TableSkeleton />
         ) : leads.length === 0 ? (
-          <EmptyState icon={Users} title="No leads yet" description="Import a CSV from an ICP's Leads tab." />
+          <EmptyState
+            icon={Users}
+            title="No leads yet"
+            description="Import a CSV into an ICP or add leads one by one."
+            action={<AddLeadsMenu variant="default" />}
+          />
         ) : visible.length === 0 ? (
           <EmptyState
             icon={Search}

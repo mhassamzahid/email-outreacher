@@ -1,8 +1,8 @@
 "use client"
 
-import Link from "next/link"
 import { useState } from "react"
-import { Search, Sparkles, Upload, Users, Wand2 } from "lucide-react"
+import { Search, Sparkles, Users, Wand2 } from "lucide-react"
+import { AddLeadsMenu } from "@/components/add-leads"
 import { EmptyState } from "@/components/empty-state"
 import { LeadsTable } from "@/components/leads-table"
 import { EnrichDialog, EnrichmentProgress, GenerateDialog, GenerationProgress } from "@/components/run-dialogs"
@@ -44,14 +44,6 @@ export default function IcpLeadsPage() {
     .filter((l) => GENERATABLE.includes(l.status))
     .map((l) => l.id)
 
-  const importButton = (
-    <Button asChild variant="outline">
-      <Link href={`/icps/${icp.id}/import`}>
-        <Upload /> Import CSV
-      </Link>
-    </Button>
-  )
-
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -79,7 +71,7 @@ export default function IcpLeadsPage() {
           </SelectContent>
         </Select>
         <div className="ml-auto flex flex-wrap gap-2">
-          {importButton}
+          <AddLeadsMenu icpId={icp.id} />
           <Button variant="outline" disabled={busy || enrichSelected.length === 0} onClick={() => setEnrichIds(enrichSelected)}>
             <Sparkles /> Enrich selected{enrichSelected.length ? ` (${enrichSelected.length})` : ""}
           </Button>
@@ -101,8 +93,8 @@ export default function IcpLeadsPage() {
         <EmptyState
           icon={Users}
           title="No leads in this ICP"
-          description="Import a CSV to add leads. You'll map columns and see a cost estimate before anything runs."
-          action={importButton}
+          description="Import a CSV or add leads one by one. Nothing is spent until you enrich, and every run shows its cost first."
+          action={<AddLeadsMenu icpId={icp.id} variant="default" />}
         />
       ) : visible.length === 0 ? (
         <EmptyState

@@ -1,7 +1,8 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
-import { Check, ChevronDown, ChevronUp, ExternalLink, Loader2, RefreshCw, Shuffle, SkipForward } from "lucide-react"
+import { Check, ChevronDown, ChevronUp, ExternalLink, Gauge, Loader2, RefreshCw, Send, Shuffle, SkipForward } from "lucide-react"
 import { toast } from "sonner"
 import { SourceIcon } from "@/components/source-icon"
 import { FlagBadges, GenerationStatusBadge, NoHookBadge, RelevanceDots } from "@/components/status"
@@ -13,6 +14,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Textarea } from "@/components/ui/textarea"
 import { SOURCE_LABEL, formatUsd, fullDate, fullName, shortDate } from "@/lib/format"
 import { estimateGenerationCost } from "@/lib/mock-actions"
+import { COST_PER_SCORE, autoSentToday, sendDecision } from "@/lib/scoring"
+import { cn } from "@/lib/utils"
 import { useStore } from "@/lib/store"
 import type { EnrichmentItem, Generation, ICP, Lead } from "@/lib/types"
 
@@ -63,7 +66,20 @@ export function ReviewPanel({
   onNext: () => void
   onClose: () => void
 }) {
-  const { items, templates, versions, genJobs, updateGeneration, startGeneration } = useStore()
+  const { items, templates, versions, genJobs, generations, settings, updateGeneration, startGeneration, sendGenerations, rescoreLead } =
+    useStore()
+  const [rescoring, setRescoring] = useState(false)
+  const sent = generation.status === "sent"
+  const score = lead.score
+  const threshold = settings.scoring.threshold
+  const decision = sendDecision(score?.value ?? null, generation.flags, settings.scoring, autoSentToday(generations))
+  const routing = sent
+    ? generation.sentBy === "auto"
+      ? `Sent automatically ${generation.sentAt ? fullDate(generation.sentAt) : ""}: the score cleared the threshold of ${threshold} with no flags.`
+      : `Sent by a person ${generation.sentAt ? fullDate(generation.sentAt) : ""}.`
+    : decision.send
+      ? `Clears the threshold of ${threshold} with no flags. It was drafted before auto-send could send it, so it waits for you.`
+      : decision.reason
   const [subject, setSubject] = useState(generation.subject)
   const [body, setBody] = useState(generation.editedBody ?? generation.body)
   const [instruction, setInstruction] = useState("")
@@ -90,19 +106,22 @@ export function ReviewPanel({
   }
 
   const approve = () => {
+    if (sent) return
     updateGeneration(generation.id, { ...edits(), status: "approved" })
     toast.success(`Approved email to ${lead.firstName}`)
     onNext()
   }
 
   const skip = () => {
+    if (sent) return
     updateGeneration(generation.id, { ...edits(), status: "skipped" })
     toast(`Skipped ${fullName(lead)}`)
     onNext()
   }
 
   const regenerate = (opts: { instruction?: string; excludeItemIds?: string[] }) => {
-    void startGeneration(icp.id, [lead.id], opts)
+    // A person is looking at this draft, so the new one stays in review even if it scores high.
+    void startGeneration(icp.id, [lead.id], { ...opts, reviewOnly: true })
     setInstruction("")
   }
 
@@ -154,13 +173,68 @@ export function ReviewPanel({
         </SheetHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto p-4">
+          <section className="space-y-3 rounded-lg border p-3" aria-label="Lead score">
+            <div className="flex items-center gap-3">
+              <Gauge className="size-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium">Lead score</h3>
+              {score ? (
+                <span className="flex items-baseline gap-1">
+                  <span className={cn("text-xl tabular-nums", score.value >= threshold ? "text-data" : "text-foreground")}>
+                    {score.value}
+                  </span>
+                  <span className="text-xs text-muted-foreground">/ 100 · threshold {threshold}</span>
+                </span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Not scored</span>
+              )}
+              {!sent && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto"
+                  disabled={rescoring}
+                  onClick={async () => {
+                    setRescoring(true)
+                    await rescoreLead(lead.id)
+                    setRescoring(false)
+                    toast.success(`Re-scored ${fullName(lead)}`)
+                  }}
+                >
+                  {rescoring ? <Loader2 className="animate-spin" /> : <RefreshCw />} Re-score ({formatUsd(COST_PER_SCORE)})
+                </Button>
+              )}
+            </div>
+            {score && (
+              <div className="relative h-2 rounded-full bg-muted" aria-hidden>
+                <div
+                  className={cn("absolute inset-y-0 left-0 rounded-full", score.value >= threshold ? "bg-data" : "bg-data-mid/60")}
+                  style={{ width: `${score.value}%` }}
+                />
+                <div className="absolute -top-1 -bottom-1 w-0.5 rounded bg-foreground/70" style={{ left: `${threshold}%` }} />
+              </div>
+            )}
+            <p className="text-sm">{routing}</p>
+            {score && score.reasons.length > 0 && (
+              <ul className="space-y-1 text-[13px] text-muted-foreground">
+                {score.reasons.map((r) => (
+                  <li key={r} className="flex gap-2">
+                    <span className="mt-2 size-1 flex-none rounded-full bg-muted-foreground/60" />
+                    {r}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="space-y-2">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-medium">Hook</h3>
               {chosen ? <RelevanceDots value={generation.relevance} /> : <NoHookBadge />}
-              <div className="ml-auto">
-                <FlagBadges flags={generation.flags} />
-              </div>
+              {generation.flags.length > 0 && (
+                <div className="ml-auto">
+                  <FlagBadges flags={generation.flags} />
+                </div>
+              )}
             </div>
             {chosen ? (
               <>
@@ -196,7 +270,7 @@ export function ReviewPanel({
           <section className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="subject">Subject</Label>
-              <Input id="subject" value={subject} onChange={(e) => setSubject(e.target.value)} />
+              <Input id="subject" value={subject} readOnly={sent} onChange={(e) => setSubject(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
@@ -205,12 +279,37 @@ export function ReviewPanel({
                   {words} words · confidence {generation.confidence}
                 </span>
               </div>
-              <Textarea id="body" rows={12} value={body} onChange={(e) => setBody(e.target.value)} className="text-sm leading-relaxed" />
+              <Textarea
+                id="body"
+                rows={12}
+                value={body}
+                readOnly={sent}
+                onChange={(e) => setBody(e.target.value)}
+                className="text-sm leading-relaxed"
+              />
             </div>
+            {sent ? (
+              <p className="rounded-lg bg-pill-info px-3 py-2 text-sm text-pill-info-ink">
+                This email has been sent, so it can no longer be edited.
+              </p>
+            ) : (
             <div className="flex flex-wrap gap-2">
-              <Button onClick={approve}>
-                <Check /> Approve <Kbd>A</Kbd>
-              </Button>
+              {generation.status === "approved" ? (
+                <Button
+                  onClick={() => {
+                    if (dirty) updateGeneration(generation.id, edits())
+                    sendGenerations([generation.id])
+                    toast.success(`Sent email to ${lead.firstName}`, { description: "Simulated: no mail connection yet." })
+                    onNext()
+                  }}
+                >
+                  <Send /> Send now
+                </Button>
+              ) : (
+                <Button onClick={approve}>
+                  <Check /> Approve <Kbd>A</Kbd>
+                </Button>
+              )}
               <Button variant="outline" onClick={skip}>
                 <SkipForward /> Skip <Kbd>S</Kbd>
               </Button>
@@ -229,9 +328,10 @@ export function ReviewPanel({
                 </Button>
               )}
             </div>
+            )}
           </section>
 
-          <section className="space-y-2 rounded-lg border p-3">
+          <section className={cn("space-y-2 rounded-lg border p-3", sent && "hidden")}>
             <h3 className="text-sm font-medium">Regenerate</h3>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
@@ -264,6 +364,14 @@ export function ReviewPanel({
           <section className="space-y-1 text-xs text-muted-foreground">
             <p>Hook prompt: {versionLabel(generation.hookPromptVersionId)}</p>
             <p>Email prompt: {versionLabel(generation.emailPromptVersionId)}</p>
+            {score && (
+              <p>
+                Scoring prompt: {versionLabel(score.promptVersionId)} ·{" "}
+                <Link href="/settings#scoring" className="underline underline-offset-2 hover:text-foreground">
+                  edit in Settings
+                </Link>
+              </p>
+            )}
             <p>
               Generated {fullDate(generation.createdAt)} · cost {formatUsd(generation.costUsd)}
             </p>

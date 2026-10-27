@@ -84,6 +84,50 @@ function normalizeUrl(value: string): string {
   return /^https?:\/\//i.test(v) ? v : `https://${v}`
 }
 
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** The website a lead would get from its email domain, or "" for free-mail addresses. */
+export function websiteFromEmail(email: string): string {
+  const domain = domainOf(email)
+  return domain && !FREE_MAIL_DOMAINS.has(domain) ? `https://${domain}` : ""
+}
+
+/**
+ * Builds a lead the same way for CSV rows and manual entry: trimmed values, lowercased email,
+ * URLs with a scheme, and the website taken from the email domain when none is given.
+ */
+export function createLead(
+  fields: Partial<Record<LeadField, string>>,
+  extra: Record<string, string>,
+  icpId: string,
+  createdAt = new Date().toISOString(),
+): { lead: Lead; websiteDerived: boolean } {
+  const value = (f: LeadField) => (fields[f] ?? "").trim()
+  const email = value("email").toLowerCase()
+  const given = normalizeUrl(value("website"))
+  const website = given || websiteFromEmail(email)
+  return {
+    websiteDerived: !given && !!website,
+    lead: {
+      id: uid("lead"),
+      icpId,
+      firstName: value("firstName"),
+      lastName: value("lastName"),
+      email,
+      company: value("company"),
+      title: value("title"),
+      website,
+      linkedinUrl: normalizeUrl(value("linkedinUrl")),
+      instagramUrl: normalizeUrl(value("instagramUrl")),
+      facebookUrl: normalizeUrl(value("facebookUrl")),
+      extra,
+      status: "imported",
+      score: null,
+      createdAt,
+    },
+  }
+}
+
 export interface ImportStats {
   totalRows: number
   missingEmail: number
@@ -159,29 +203,10 @@ export function buildImport(
     }
     seen.add(email)
 
-    let website = normalizeUrl(fields.website ?? "")
-    const domain = domainOf(email)
-    if (!website && domain && !FREE_MAIL_DOMAINS.has(domain)) {
-      website = `https://${domain}`
+    const { lead, websiteDerived } = createLead({ ...fields, email }, extra, icpId, now)
+    if (websiteDerived) {
       stats.websitesDerived++
       derivedWebsite.add(leads.length)
-    }
-
-    const lead: Lead = {
-      id: uid("lead"),
-      icpId,
-      firstName: fields.firstName ?? "",
-      lastName: fields.lastName ?? "",
-      email,
-      company: fields.company ?? "",
-      title: fields.title ?? "",
-      website,
-      linkedinUrl: normalizeUrl(fields.linkedinUrl ?? ""),
-      instagramUrl: normalizeUrl(fields.instagramUrl ?? ""),
-      facebookUrl: normalizeUrl(fields.facebookUrl ?? ""),
-      extra,
-      status: "imported",
-      createdAt: now,
     }
     if (lead.linkedinUrl) stats.withLinkedin++
     if (lead.instagramUrl) stats.withInstagram++

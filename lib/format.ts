@@ -29,32 +29,35 @@ export function fullName(lead: Pick<Lead, "firstName" | "lastName">): string {
 }
 
 export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
-  imported: "Imported",
+  imported: "Not enriched",
   enriching: "Enriching",
   enriched: "Enriched",
   no_content: "No content",
-  generated: "Generated",
+  generated: "To review",
   approved: "Approved",
+  sent: "Sent",
   skipped: "Skipped",
   failed: "Failed",
 }
 
 /** Solid color used for status dots and the breakdown bar. */
 export const LEAD_STATUS_COLOR: Record<LeadStatus, string> = {
-  imported: "bg-slate-400",
-  enriching: "bg-sky-400",
-  enriched: "bg-blue-500",
-  no_content: "bg-zinc-300 dark:bg-zinc-600",
-  generated: "bg-violet-500",
-  approved: "bg-emerald-500",
-  skipped: "bg-amber-400",
-  failed: "bg-red-500",
+  imported: "bg-foreground/20",
+  enriching: "bg-data-mid",
+  enriched: "bg-data-soft ring-1 ring-inset ring-data-mid",
+  no_content: "bg-foreground/20",
+  generated: "bg-data-mid",
+  approved: "bg-positive",
+  sent: "bg-data",
+  skipped: "bg-foreground/35",
+  failed: "bg-negative",
 }
 
 export const GENERATION_STATUS_LABEL: Record<GenerationStatus, string> = {
   draft: "Draft",
   edited: "Edited",
   approved: "Approved",
+  sent: "Sent",
   skipped: "Skipped",
 }
 
@@ -73,7 +76,8 @@ export const FLAG_LABEL: Record<GenerationFlag, string> = {
   word_count: "Word count",
 }
 
-export const MODELS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"]
+// OpenAI API model IDs: flagship, balanced (default), cost-sensitive high volume.
+export const MODELS = ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]
 
 /** First sentence after the greeting, used as a preview in tables. */
 export function firstLine(body: string): string {

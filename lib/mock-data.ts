@@ -185,55 +185,108 @@ Rules
 Return JSON only:
 { "subject": "...", "body": "...", "confidence": <0-100> }`
 
+export const DEFAULT_SCORE_SYSTEM = `You score how safe and worthwhile a cold email is to send without a person checking it first. You are strict: when unsure, score lower so a person reviews it.`
+
+export const DEFAULT_SCORE_USER = `ICP: {{icp.name}} ({{icp.titles}} in {{icp.industries}})
+Pains: {{icp.pains}}
+Offer: {{icp.offer}}
+Proof we can claim: {{icp.proof}}
+
+Lead: {{lead.firstName}} {{lead.lastName}}, {{lead.title}} at {{lead.company}} ({{lead.website}})
+
+Content found for this lead:
+{{items}}
+
+Hook used (may be empty): {{hook.text}}
+
+Drafted email
+Subject: {{email.subject}}
+{{email.body}}
+
+Score from 0 to 100:
+- Fit, up to 40: does the lead match the ICP's titles and industries?
+- Hook, up to 30: is the opening grounded in a real, recent, relevant item? With no hook, at most 10.
+- Email, up to 30: does it read naturally, follow the rules, avoid invented facts and end on one clear call to action?
+Subtract 30 for anything sensitive (grief, illness, politics, religion, family) or any claim the proof does not support.
+
+Return JSON only:
+{ "score": <0-100>, "reasons": ["<short reason>", "..."] }
+Give 2 to 4 reasons, most important first.`
+
+const SCORE_USER_V1 = `Lead: {{lead.firstName}} {{lead.lastName}}, {{lead.title}} at {{lead.company}}
+ICP: {{icp.name}}
+
+Email:
+{{email.subject}}
+{{email.body}}
+
+How good is this lead and email, from 0 to 100?
+
+Return JSON only:
+{ "score": <0-100>, "reasons": ["..."] }`
+
 export const promptTemplates: PromptTemplate[] = [
   { id: "tpl_hook_default", name: "Default hook selection", kind: "hook", isDefault: true, currentVersionId: "pv_hook_default_3" },
   { id: "tpl_hook_strict", name: "Strict hook (business topics only)", kind: "hook", isDefault: false, currentVersionId: "pv_hook_strict_1" },
   { id: "tpl_email_default", name: "Default email writer", kind: "email", isDefault: true, currentVersionId: "pv_email_default_2" },
   { id: "tpl_email_short", name: "Short and direct", kind: "email", isDefault: false, currentVersionId: "pv_email_short_1" },
+  { id: "tpl_score_default", name: "Default lead scoring", kind: "score", isDefault: true, currentVersionId: "pv_score_default_2" },
 ]
 
 export const promptVersions: PromptVersion[] = [
   {
     id: "pv_hook_default_1", templateId: "tpl_hook_default", version: 1,
     systemPrompt: "You pick the best personalization hook for a cold email.",
-    userPrompt: HOOK_USER_V1, model: "claude-sonnet-5-5", temperature: 0.4, maxTokens: 300,
+    userPrompt: HOOK_USER_V1, model: "gpt-6.1-sol", temperature: 0.4, maxTokens: 300,
     note: "Initial version", createdAt: daysAgo(83),
   },
   {
     id: "pv_hook_default_2", templateId: "tpl_hook_default", version: 2,
     systemPrompt: DEFAULT_HOOK_SYSTEM,
-    userPrompt: HOOK_USER_V2, model: "claude-sonnet-5-5", temperature: 0.3, maxTokens: 400,
+    userPrompt: HOOK_USER_V2, model: "gpt-6.1-sol", temperature: 0.3, maxTokens: 400,
     note: "Added pains and sensitive topic rules after a hook referenced a bereavement post", createdAt: daysAgo(54),
   },
   {
     id: "pv_hook_default_3", templateId: "tpl_hook_default", version: 3,
     systemPrompt: DEFAULT_HOOK_SYSTEM,
-    userPrompt: DEFAULT_HOOK_USER, model: "claude-sonnet-5-5", temperature: 0.2, maxTokens: 400,
+    userPrompt: DEFAULT_HOOK_USER, model: "gpt-6.1-sol", temperature: 0.2, maxTokens: 400,
     note: "Hook guidance per ICP, 25 word cap, flags in output", createdAt: daysAgo(25),
   },
   {
     id: "pv_hook_strict_1", templateId: "tpl_hook_strict", version: 1,
     systemPrompt: DEFAULT_HOOK_SYSTEM,
-    userPrompt: STRICT_HOOK_USER, model: "claude-sonnet-5-5", temperature: 0.1, maxTokens: 300,
+    userPrompt: STRICT_HOOK_USER, model: "gpt-6.1-sol", temperature: 0.1, maxTokens: 300,
     note: "Stricter variant for regions where personal or religious references land badly", createdAt: daysAgo(31),
   },
   {
     id: "pv_email_default_1", templateId: "tpl_email_default", version: 1,
     systemPrompt: "You write short, plain-text cold emails.",
-    userPrompt: EMAIL_USER_V1, model: "claude-sonnet-5-5", temperature: 0.8, maxTokens: 500,
+    userPrompt: EMAIL_USER_V1, model: "gpt-6.1-sol", temperature: 0.8, maxTokens: 500,
     note: "Initial version", createdAt: daysAgo(83),
   },
   {
     id: "pv_email_default_2", templateId: "tpl_email_default", version: 2,
     systemPrompt: DEFAULT_EMAIL_SYSTEM,
-    userPrompt: DEFAULT_EMAIL_USER, model: "claude-sonnet-5-5", temperature: 0.7, maxTokens: 600,
+    userPrompt: DEFAULT_EMAIL_USER, model: "gpt-6.1-sol", temperature: 0.7, maxTokens: 600,
     note: "Word count range, no-hook fallback, lowercase subjects", createdAt: daysAgo(36),
   },
   {
     id: "pv_email_short_1", templateId: "tpl_email_short", version: 1,
     systemPrompt: DEFAULT_EMAIL_SYSTEM,
-    userPrompt: SHORT_EMAIL_USER, model: "claude-sonnet-5-5", temperature: 0.7, maxTokens: 400,
+    userPrompt: SHORT_EMAIL_USER, model: "gpt-6.1-sol", temperature: 0.7, maxTokens: 400,
     note: "Shorter format for e-commerce founders who read on mobile", createdAt: daysAgo(19),
+  },
+  {
+    id: "pv_score_default_1", templateId: "tpl_score_default", version: 1,
+    systemPrompt: "You score cold emails.",
+    userPrompt: SCORE_USER_V1, model: "gpt-6-luna", temperature: 0.2, maxTokens: 200,
+    note: "Initial version", createdAt: daysAgo(21),
+  },
+  {
+    id: "pv_score_default_2", templateId: "tpl_score_default", version: 2,
+    systemPrompt: DEFAULT_SCORE_SYSTEM,
+    userPrompt: DEFAULT_SCORE_USER, model: "gpt-6-luna", temperature: 0, maxTokens: 250,
+    note: "Fit, hook and email weighted 40/30/30; sensitive content and unsupported claims cost 30", createdAt: daysAgo(9),
   },
 ]
 
@@ -592,16 +645,14 @@ const leadRows: Record<string, LeadRow[]> = {
   ],
 }
 
-// Status by row index, same distribution for every ICP (25 rows).
-const STATUS_PLAN: LeadStatus[] = [
-  "approved", "approved", "approved", "approved",
-  "generated", "generated", "generated", "generated", "generated", "generated",
-  "skipped", "skipped",
-  "enriched", "enriched", "enriched", "enriched", "enriched",
-  "no_content", "no_content", "no_content",
-  "failed",
-  "imported", "imported", "imported", "imported",
-]
+// Status by row index (25 rows per ICP). Each ICP is at a different point in its pipeline;
+// row 7 is always a generated lead because NO_HOOK_ROWS points at it.
+const plan = (counts: [LeadStatus, number][]): LeadStatus[] => counts.flatMap(([s, n]) => Array<LeadStatus>(n).fill(s))
+const STATUS_PLANS: Record<string, LeadStatus[]> = {
+  icp_saas: plan([["approved", 4], ["generated", 6], ["skipped", 2], ["enriched", 5], ["no_content", 3], ["failed", 1], ["imported", 4]]),
+  icp_uae_re: plan([["approved", 7], ["generated", 4], ["skipped", 1], ["enriched", 3], ["no_content", 2], ["imported", 8]]),
+  icp_ecom: plan([["approved", 2], ["generated", 9], ["skipped", 3], ["enriched", 6], ["no_content", 1], ["failed", 2], ["imported", 2]]),
+}
 
 /** Rows that get a generation without a hook (a normal state). */
 const NO_HOOK_ROWS = new Set([7])
@@ -646,7 +697,8 @@ function buildLeads(): Lead[] {
         instagramUrl: src.includes("ig") ? `https://www.instagram.com/${companySlug.replace(/-/g, "")}` : "",
         facebookUrl: src.includes("fb") ? `https://www.facebook.com/${companySlug.replace(/-/g, "")}` : "",
         extra: extraFor[icp.id](r),
-        status: STATUS_PLAN[i],
+        status: STATUS_PLANS[icp.id][i],
+        score: null,
         createdAt: daysAgo(30 - Math.floor(i / 5), i),
       })
     })
@@ -777,6 +829,61 @@ export function chooseHookItem(
   return usable[0] ?? null
 }
 
+const SOURCE_NAME: Record<Source, string> = { linkedin: "LinkedIn", instagram: "Instagram", facebook: "Facebook", website: "website" }
+
+const FLAG_PENALTY: Partial<Record<GenerationFlag, [number, string]>> = {
+  sensitive_topic: [30, "Only sensitive content was found for this lead"],
+  repost: [8, "The hook is a repost, not their own words"],
+  old_content: [8, "The hook is over 60 days old"],
+  low_relevance: [8, "The hook is only loosely related to the offer"],
+  word_count: [6, "The email is outside the target length"],
+}
+
+/**
+ * Stand-in for the scoring prompt: fit (title against the ICP), hook strength and draft quality,
+ * minus penalties for flags. Returns up to four reasons, most important first.
+ */
+export function mockScore(
+  icp: ICP,
+  lead: Lead,
+  gen: Pick<Generation, "chosenItemId" | "relevance" | "confidence" | "flags">,
+  items: EnrichmentItem[],
+  r: () => number,
+): { value: number; reasons: string[] } {
+  const reasons: [number, string][] = []
+  const matched = icp.titles.find((t) => lead.title.toLowerCase().includes(t.toLowerCase()))
+  const fit = matched ? 34 : lead.title ? 18 : 10
+  reasons.push([
+    matched ? 3 : 4,
+    matched
+      ? `Title matches the ICP (${matched})`
+      : lead.title
+        ? `"${lead.title}" is not one of the ICP's titles`
+        : "No job title on the lead",
+  ])
+  const item = items.find((i) => i.id === gen.chosenItemId)
+  const hook = item ? 8 + gen.relevance * 4 : 6
+  reasons.push([
+    item ? 2 : 5,
+    item
+      ? `Hook from a ${SOURCE_NAME[item.source]} ${item.source === "website" ? "page" : "post"}, relevance ${gen.relevance} of 5`
+      : "No usable hook, so the email opens on their role",
+  ])
+  const email = Math.round(gen.confidence * 0.3)
+  reasons.push([1, `Draft confidence ${gen.confidence} of 100`])
+  let value = fit + hook + email + Math.round((r() - 0.5) * 6)
+  for (const f of gen.flags) {
+    const penalty = FLAG_PENALTY[f]
+    if (!penalty) continue
+    value -= penalty[0]
+    reasons.push([penalty[0], penalty[1]])
+  }
+  return {
+    value: Math.max(3, Math.min(98, value)),
+    reasons: reasons.sort((a, b) => b[0] - a[0]).slice(0, 4).map(([, text]) => text),
+  }
+}
+
 function buildGenerations(): Generation[] {
   const out: Generation[] = []
   leads.forEach((lead, idx) => {
@@ -802,8 +909,11 @@ function buildGenerations(): Generation[] {
       : 42 + Math.floor(r() * 16)
 
     const { subject, body } = composeEmail(icp.id, lead, choice?.seed.hook ?? "", idx)
+    // A few approved emails in the UAE ICP have already gone out, so the Sent view has history.
+    const sent = lead.status === "approved" && lead.icpId === "icp_uae_re" && rowIndex < 3
+    if (sent) lead.status = "sent"
     const status =
-      lead.status === "approved" ? "approved" : lead.status === "skipped" ? "skipped" : rowIndex % 3 === 0 ? "edited" : "draft"
+      sent ? "sent" : lead.status === "approved" ? "approved" : lead.status === "skipped" ? "skipped" : rowIndex % 3 === 0 ? "edited" : "draft"
 
     out.push({
       id: `gen_${lead.id}`,
@@ -821,6 +931,8 @@ function buildGenerations(): Generation[] {
       editedBody: status === "edited" ? body.replace(/\n\n([^\n]+)\n\nAlex$/, "\n\n$1\n\nThanks,\nAlex") : null,
       costUsd: COST_PER_GENERATION,
       createdAt: daysAgo(3 - (idx % 3), idx % 12),
+      sentAt: sent ? daysAgo(1, rowIndex + 2) : null,
+      sentBy: sent ? "manual" : null,
     })
   })
   return out
@@ -828,14 +940,24 @@ function buildGenerations(): Generation[] {
 
 export const generations: Generation[] = buildGenerations()
 
+// Every lead with a draft has been through the scoring prompt.
+generations.forEach((g, idx) => {
+  const lead = leads.find((l) => l.id === g.leadId)!
+  const icp = icps.find((i) => i.id === lead.icpId)!
+  const items = enrichmentItems.filter((it) => it.leadId === lead.id)
+  const { value, reasons } = mockScore(icp, lead, g, items, seededRandom(idx * 71 + 5))
+  lead.score = { value, reasons, promptVersionId: "pv_score_default_2", scoredAt: g.createdAt }
+})
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
 
 export const settings: Settings = {
-  defaultModel: "claude-sonnet-5-5",
+  defaultModel: "gpt-6.1-sol",
   postsPerLead: 5,
   maxPostAgeDays: 60,
   monthlyBudgetUsd: 150,
   spentThisMonthUsd: 118.62,
+  scoring: { promptId: null, threshold: 80, autoSend: false, dailyAutoSendCap: 50 },
 }

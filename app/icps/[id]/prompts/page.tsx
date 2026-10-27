@@ -10,11 +10,10 @@ import { useIcpParam } from "@/hooks/use-icp"
 import { fullDate } from "@/lib/format"
 import { currentVersion, resolveTemplate } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
-import type { PromptKind } from "@/lib/types"
 
 const DEFAULT = "__default__"
 
-const COPY: Record<PromptKind, { title: string; description: string }> = {
+const COPY: Record<"hook" | "email", { title: string; description: string }> = {
   hook: {
     title: "Hook selection prompt",
     description: "Reads the lead's enrichment items and picks the single best hook, or none.",

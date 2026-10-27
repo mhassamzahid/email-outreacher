@@ -36,6 +36,7 @@ export type LeadStatus =
   | "no_content"
   | "generated"
   | "approved"
+  | "sent"
   | "skipped"
   | "failed"
 
@@ -46,6 +47,7 @@ export const LEAD_STATUSES: LeadStatus[] = [
   "no_content",
   "generated",
   "approved",
+  "sent",
   "skipped",
   "failed",
 ]
@@ -64,7 +66,17 @@ export interface Lead {
   facebookUrl: string
   extra: Record<string, string>
   status: LeadStatus
+  /** AI lead score from the scoring prompt; null until the lead has a draft to score. */
+  score: LeadScore | null
   createdAt: string
+}
+
+export interface LeadScore {
+  /** 0 to 100 */
+  value: number
+  reasons: string[]
+  promptVersionId: string
+  scoredAt: string
 }
 
 export interface EnrichmentItem {
@@ -77,7 +89,7 @@ export interface EnrichmentItem {
   mediaType: MediaType
 }
 
-export type PromptKind = "hook" | "email"
+export type PromptKind = "hook" | "email" | "score"
 
 export interface PromptTemplate {
   id: string
@@ -100,7 +112,7 @@ export interface PromptVersion {
   createdAt: string
 }
 
-export type GenerationStatus = "draft" | "edited" | "approved" | "skipped"
+export type GenerationStatus = "draft" | "edited" | "approved" | "sent" | "skipped"
 
 export type GenerationFlag =
   | "sensitive_topic"
@@ -127,6 +139,9 @@ export interface Generation {
   editedBody: string | null
   costUsd: number
   createdAt: string
+  sentAt: string | null
+  /** "auto" when the lead scored at or above the threshold with auto-send on. */
+  sentBy: "auto" | "manual" | null
 }
 
 export interface Settings {
@@ -136,4 +151,15 @@ export interface Settings {
   monthlyBudgetUsd: number
   /** Spend recorded this calendar month (mock). */
   spentThisMonthUsd: number
+  scoring: ScoringSettings
+}
+
+export interface ScoringSettings {
+  /** Scoring template; null uses the default scoring template. */
+  promptId: string | null
+  /** Leads scoring at or above this are sent automatically (when autoSend is on). */
+  threshold: number
+  autoSend: boolean
+  /** Most emails auto-sent per day; the rest wait in review. */
+  dailyAutoSendCap: number
 }

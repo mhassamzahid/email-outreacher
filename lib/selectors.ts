@@ -40,3 +40,37 @@ export function icpsUsingTemplate(icps: ICP[], template: PromptTemplate): ICP[] 
 
 export const ENRICHABLE: LeadStatus[] = ["imported", "failed", "no_content"]
 export const GENERATABLE: LeadStatus[] = ["enriched", "no_content", "generated", "skipped"]
+
+export type PipelineStage = "approved" | "review" | "ready" | "pending" | "dropped"
+
+/** Pipeline order, strongest first. One hue ramp for progress, grey for what left the pipeline. */
+export const PIPELINE_STAGES: { key: PipelineStage; label: string; swatch: string }[] = [
+  { key: "approved", label: "Approved or sent", swatch: "bg-data" },
+  { key: "review", label: "To review", swatch: "bg-data-mid" },
+  { key: "ready", label: "Ready to draft", swatch: "bg-data-soft" },
+  { key: "pending", label: "Not enriched", swatch: "bg-foreground/15" },
+  { key: "dropped", label: "Skipped or failed", swatch: "bg-foreground/35" },
+]
+
+const STAGE_OF: Record<LeadStatus, PipelineStage> = {
+  approved: "approved",
+  sent: "approved",
+  generated: "review",
+  enriched: "ready",
+  no_content: "ready",
+  imported: "pending",
+  enriching: "pending",
+  skipped: "dropped",
+  failed: "dropped",
+}
+
+export function pipeline(leads: Lead[]): Record<PipelineStage, number> {
+  const counts: Record<PipelineStage, number> = { approved: 0, review: 0, ready: 0, pending: 0, dropped: 0 }
+  for (const l of leads) counts[STAGE_OF[l.status]]++
+  return counts
+}
+
+/** The scoring template in use (Settings), falling back to the default scoring template. */
+export function resolveScoringTemplate(templates: PromptTemplate[], scoring: { promptId: string | null }) {
+  return templates.find((t) => t.id === scoring.promptId && t.kind === "score") ?? templates.find((t) => t.kind === "score" && t.isDefault)
+}

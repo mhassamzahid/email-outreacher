@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { SourceIcons } from "@/components/source-icon"
-import { LeadStatusBadge } from "@/components/status"
+import { LeadStatusBadge, ScoreBadge } from "@/components/status"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -25,7 +25,7 @@ export function LeadsTable({
   onSelectedChange: (next: Set<string>) => void
   showIcp?: boolean
 }) {
-  const { icps, items } = useStore()
+  const { icps, items, settings } = useStore()
   const [page, setPage] = useState(0)
   const pageCount = Math.max(1, Math.ceil(leads.length / PAGE_SIZE))
   const current = Math.min(page, pageCount - 1)
@@ -72,6 +72,7 @@ export function LeadsTable({
               {showIcp && <TableHead>ICP</TableHead>}
               <TableHead>Sources</TableHead>
               <TableHead className="text-right">Items</TableHead>
+              <TableHead className="text-right">Score</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Added</TableHead>
             </TableRow>
@@ -101,6 +102,9 @@ export function LeadsTable({
                   <SourceIcons sources={leadSources(lead)} />
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{itemCount.get(lead.id) ?? 0}</TableCell>
+                <TableCell className="text-right">
+                  <ScoreBadge value={lead.score?.value} threshold={settings.scoring.threshold} />
+                </TableCell>
                 <TableCell>
                   <LeadStatusBadge status={lead.status} />
                 </TableCell>

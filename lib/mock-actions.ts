@@ -5,8 +5,10 @@ import {
   composeEmail,
   findPostSeed,
   leadSources,
+  mockScore,
   pickItemsForLead,
 } from "./mock-data"
+import { COST_PER_SCORE } from "./scoring"
 import { buildVariables, renderTemplate, type HookContext } from "./templating"
 import type {
   EnrichmentItem,
@@ -14,6 +16,7 @@ import type {
   GenerationFlag,
   ICP,
   Lead,
+  LeadScore,
   PromptKind,
   PromptVersion,
   Settings,
@@ -78,8 +81,9 @@ export function estimateEnrichmentCost(
   return { bySource, total }
 }
 
+/** Drafting plus scoring, per lead. */
 export function estimateGenerationCost(leadCount: number): number {
-  return leadCount * COST_PER_GENERATION
+  return leadCount * (COST_PER_GENERATION + COST_PER_SCORE)
 }
 
 // ---------------------------------------------------------------------------
@@ -150,6 +154,8 @@ export interface GenerationRequest {
   items: EnrichmentItem[]
   hookVersion: PromptVersion
   emailVersion: PromptVersion
+  /** The scoring prompt version; every draft is scored right after it is written. */
+  scoreVersion: PromptVersion
   /** Optional one-line instruction, e.g. "make it shorter". */
   instruction?: string
   /** Item ids to avoid, for "regenerate with a different item". */
@@ -170,7 +176,7 @@ function applyInstruction(body: string, instruction?: string): string {
 
 export async function runGeneration(
   req: GenerationRequest,
-  onResult?: (generation: Generation) => void,
+  onResult?: (generation: Generation, score: LeadScore) => void,
 ): Promise<Generation[]> {
   const out: Generation[] = []
   for (const lead of req.leads) {
@@ -210,11 +216,34 @@ export async function runGeneration(
       editedBody: null,
       costUsd: COST_PER_GENERATION,
       createdAt: new Date().toISOString(),
+      sentAt: null,
+      sentBy: null,
+    }
+    await delay(between(120, 260))
+    const scored = mockScore(req.icp, lead, generation, leadItems, Math.random)
+    const score: LeadScore = {
+      ...scored,
+      promptVersionId: req.scoreVersion.id,
+      scoredAt: new Date().toISOString(),
     }
     out.push(generation)
-    onResult?.(generation)
+    onResult?.(generation, score)
   }
   return out
+}
+
+/** Re-runs only the scoring prompt for a lead's current draft. */
+export async function runScoring(
+  icp: ICP,
+  lead: Lead,
+  generation: Generation,
+  items: EnrichmentItem[],
+  scoreVersion: PromptVersion,
+): Promise<LeadScore> {
+  await delay(between(500, 900))
+  const leadItems = items.filter((it) => it.leadId === lead.id)
+  const scored = mockScore(icp, lead, generation, leadItems, Math.random)
+  return { ...scored, promptVersionId: scoreVersion.id, scoredAt: new Date().toISOString() }
 }
 
 // ---------------------------------------------------------------------------
@@ -232,6 +261,8 @@ export interface PromptTestInput {
   lead: Lead
   items: EnrichmentItem[]
   hook?: HookContext | null
+  /** The lead's current draft, for the scoring prompt. */
+  generation?: Generation | null
 }
 
 export interface PromptTestResult {
@@ -247,7 +278,10 @@ export interface PromptTestResult {
 
 /** Rendering is real. Only the model call is mocked. */
 export function renderPrompt(input: PromptTestInput) {
-  const vars = buildVariables({ icp: input.icp, lead: input.lead, items: input.items, hook: input.hook })
+  const email = input.generation
+    ? { subject: input.generation.subject, body: input.generation.editedBody ?? input.generation.body }
+    : null
+  const vars = buildVariables({ icp: input.icp, lead: input.lead, items: input.items, hook: input.hook, email })
   return {
     renderedSystem: renderTemplate(input.version.systemPrompt, vars),
     renderedUser: renderTemplate(input.version.userPrompt, vars),
@@ -272,6 +306,10 @@ export async function runPromptTest(input: PromptTestInput): Promise<PromptTestR
           flags: choice.seed.repost ? ["repost"] : [],
         }
       : { chosen_item: null, summary: "", hook: "", relevance: 0, flags: [] }
+  } else if (input.kind === "score") {
+    const gen = input.generation ?? { chosenItemId: null, relevance: 0, confidence: 50, flags: [] }
+    const { value, reasons } = mockScore(input.icp, input.lead, gen, input.items, Math.random)
+    output = { score: value, reasons }
   } else {
     const { subject, body } = composeEmail(input.icp.id, input.lead, input.hook?.text ?? "", Math.floor(Math.random() * 3))
     output = { subject, body, confidence: 60 + Math.floor(Math.random() * 35) }

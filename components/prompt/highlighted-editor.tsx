@@ -21,8 +21,8 @@ function highlight(text: string, kind: PromptKind) {
         className={cn(
           "rounded-sm",
           known
-            ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
-            : "bg-red-500/15 text-red-700 underline decoration-wavy dark:text-red-300",
+            ? "bg-data-soft/70 text-data"
+            : "bg-pill-negative text-pill-negative-ink underline decoration-wavy",
         )}
       >
         {part}
@@ -70,7 +70,8 @@ export function HighlightedEditor({
         onChange={(e) => onChange(e.target.value)}
         className={cn(
           SHARED,
-          "relative block w-full resize-none overflow-hidden bg-transparent text-transparent caret-foreground outline-none selection:bg-sky-500/30",
+          // The textarea is transparent so the highlighted copy beneath shows through.
+          "relative block w-full resize-none overflow-hidden bg-transparent text-transparent caret-foreground outline-none selection:bg-data-soft", // taste-skill-ignore
         )}
       />
     </div>

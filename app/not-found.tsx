@@ -8,7 +8,7 @@ export default function NotFound() {
   return (
     <>
       <PageHeader title="Not found" />
-      <div className="p-4 md:p-6">
+      <div className="px-4 pb-10 md:px-8">
         <EmptyState
           icon={SearchX}
           title="This page doesn't exist"

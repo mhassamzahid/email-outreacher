@@ -15,7 +15,8 @@ import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { SOURCE_LABEL, formatUsd } from "@/lib/format"
 import { estimateEnrichmentCost, estimateGenerationCost } from "@/lib/mock-actions"
-import { currentVersion, resolveTemplate } from "@/lib/selectors"
+import { autoSentToday } from "@/lib/scoring"
+import { currentVersion, resolveScoringTemplate, resolveTemplate } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import type { ICP } from "@/lib/types"
 import { SOURCES } from "@/lib/types"
@@ -122,7 +123,11 @@ export function GenerateDialog({
   onOpenChange: (open: boolean) => void
   title?: string
 }) {
-  const { templates, versions, startGeneration } = useStore()
+  const { templates, versions, settings, generations, startGeneration } = useStore()
+  const scoreTpl = resolveScoringTemplate(templates, settings.scoring)
+  const scoreV = currentVersion(versions, scoreTpl)
+  const { autoSend, threshold, dailyAutoSendCap } = settings.scoring
+  const capLeft = Math.max(0, dailyAutoSendCap - autoSentToday(generations))
   const hookTpl = resolveTemplate(templates, icp, "hook")
   const emailTpl = resolveTemplate(templates, icp, "email")
   const hookV = currentVersion(versions, hookTpl)
@@ -135,8 +140,8 @@ export function GenerateDialog({
         <DialogHeader>
           <DialogTitle>{title ?? `Generate ${leadIds.length} email${leadIds.length === 1 ? "" : "s"}`}</DialogTitle>
           <DialogDescription>
-            Each lead runs through hook selection, then email writing. Existing drafts for these leads are replaced.
-            Nothing is approved automatically.
+            Each lead runs through hook selection, email writing, then scoring. Existing drafts for these leads are
+            replaced.
           </DialogDescription>
         </DialogHeader>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
@@ -148,9 +153,26 @@ export function GenerateDialog({
           <dd>
             {emailTpl?.name} <span className="text-muted-foreground">v{emailV?.version}</span>
           </dd>
+          <dt className="text-muted-foreground">Scoring prompt</dt>
+          <dd>
+            {scoreTpl?.name} <span className="text-muted-foreground">v{scoreV?.version}</span>
+          </dd>
           <dt className="text-muted-foreground">Estimated cost</dt>
-          <dd className="font-medium tabular-nums">{formatUsd(cost)}</dd>
+          <dd className="font-medium tabular-nums">{formatUsd(cost)} <span className="font-normal text-muted-foreground">incl. scoring</span></dd>
         </dl>
+        <p
+          className={
+            autoSend && !title
+              ? "rounded-lg bg-pill-info px-3 py-2 text-sm text-pill-info-ink"
+              : "rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground"
+          }
+        >
+          {title
+            ? "Regenerated drafts stay in review and are never sent automatically."
+            : autoSend
+              ? `Auto-send is on: drafts scoring ${threshold} or more with no flags are sent right away (${capLeft} left today). The rest wait for review.`
+              : `Auto-send is off: every draft waits for review. Drafts scoring ${threshold} or more are marked so you can approve them in bulk.`}
+        </p>
         <BudgetLine cost={cost} />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

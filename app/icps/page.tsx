@@ -1,62 +1,80 @@
 "use client"
 
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { useState } from "react"
-import { Plus, Target } from "lucide-react"
-import { toast } from "sonner"
+import { ArrowRight, Plus, Target } from "lucide-react"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
-import { StatusBar } from "@/components/status"
+import { ConfidenceBadge, Pill, PipelineStrip } from "@/components/status"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Textarea } from "@/components/ui/textarea"
 import { useMockLoading } from "@/hooks/use-mock-loading"
-import { statusCounts } from "@/lib/selectors"
+import { FLAG_LABEL, fullName } from "@/lib/format"
+import { estimateEnrichmentCost, estimateGenerationCost } from "@/lib/mock-actions"
+import { generationByLead, pipeline } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
+import type { Generation, Lead } from "@/lib/types"
+
+const LOW_CONFIDENCE = 60
 
 export default function IcpsPage() {
-  const { icps, leads, createIcp } = useStore()
+  const { icps, leads, generations, settings } = useStore()
   const loading = useMockLoading()
-  const router = useRouter()
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
 
-  const create = () => {
-    const icp = createIcp(name.trim(), description.trim())
-    setOpen(false)
-    setName("")
-    setDescription("")
-    toast.success(`Created ${icp.name}`)
-    router.push(`/icps/${icp.id}`)
-  }
+  const rows = icps.map((icp) => {
+    const icpLeads = leads.filter((l) => l.icpId === icp.id)
+    return { icp, leads: icpLeads, counts: pipeline(icpLeads) }
+  })
+  const toReview = rows.reduce((sum, r) => sum + r.counts.review, 0)
+  const waiting = rows.filter((r) => r.counts.review > 0).length
+  const notEnriched = rows.reduce((sum, r) => sum + r.counts.pending, 0)
+
+  const genMap = generationByLead(generations)
+  const attention = leads
+    .map((lead) => ({ lead, gen: genMap.get(lead.id), icpName: icps.find((i) => i.id === lead.icpId)?.name ?? "" }))
+    .filter(
+      (r): r is { lead: Lead; gen: Generation; icpName: string } =>
+        !!r.gen &&
+        (r.gen.status === "draft" || r.gen.status === "edited") &&
+        (r.gen.flags.length > 0 || r.gen.confidence < LOW_CONFIDENCE),
+    )
+    .sort((a, b) => a.gen.confidence - b.gen.confidence)
+
+  const nextRuns = rows.map(({ icp, leads: icpLeads }) => {
+    const toEnrich = icpLeads.filter((l) => l.status === "imported" || l.status === "failed")
+    const toDraft = icpLeads.filter((l) => l.status === "enriched" || l.status === "no_content")
+    return {
+      icp,
+      enrich: toEnrich.length,
+      enrichCost: estimateEnrichmentCost(toEnrich, icp.enabledSources, settings.postsPerLead).total,
+      draft: toDraft.length,
+      draftCost: estimateGenerationCost(toDraft.length),
+    }
+  })
 
   const newButton = (
-    <Button onClick={() => setOpen(true)}>
-      <Plus /> New ICP
+    <Button asChild>
+      <Link href="/icps/new">
+        <Plus /> New ICP
+      </Link>
     </Button>
   )
 
   return (
     <>
-      <PageHeader title="ICPs" description="Who you sell to, how you talk to them, and their leads" actions={newButton} />
-      <div className="p-4 md:p-6">
+      <PageHeader
+        title="ICPs"
+        description={
+          toReview > 0
+            ? `${toReview} drafts waiting for review in ${waiting} ICP${waiting === 1 ? "" : "s"} · ${notEnriched} leads not enriched yet`
+            : "Nothing waiting for review"
+        }
+        actions={newButton}
+      />
+      <div className="px-4 pb-8 md:px-8">
         {loading ? (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="space-y-px overflow-hidden rounded-lg border">
             {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-44 rounded-xl" />
+              <Skeleton key={i} className="h-[104px] rounded-none" />
             ))}
           </div>
         ) : icps.length === 0 ? (
@@ -67,78 +85,157 @@ export default function IcpsPage() {
             action={newButton}
           />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {icps.map((icp) => {
-              const icpLeads = leads.filter((l) => l.icpId === icp.id)
-              const counts = statusCounts(icpLeads)
-              const enriched = icpLeads.length - counts.imported - counts.enriching - counts.failed - counts.no_content
-              const generated = counts.generated + counts.approved + counts.skipped
-              const stats = [
-                ["Leads", icpLeads.length],
-                ["Enriched", enriched],
-                ["Generated", generated],
-                ["Approved", counts.approved],
-              ] as const
-              return (
-                <Link key={icp.id} href={`/icps/${icp.id}`} className="group rounded-xl focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none">
-                  <Card className="h-full transition-colors group-hover:border-foreground/20">
-                    <CardHeader>
-                      <CardTitle className="truncate">{icp.name}</CardTitle>
-                      <CardDescription className="line-clamp-2 min-h-10">
-                        {icp.description || "No description"}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
-                      <dl className="grid grid-cols-4 gap-2">
-                        {stats.map(([label, value]) => (
-                          <div key={label}>
-                            <dt className="text-xs text-muted-foreground">{label}</dt>
-                            <dd className="text-lg font-semibold tabular-nums">{value}</dd>
+          <ul className="divide-y divide-rule overflow-hidden rounded-lg border">
+            {rows.map(({ icp, leads: icpLeads, counts }) => (
+              <li
+                key={icp.id}
+                className="grid gap-x-8 gap-y-4 px-5 py-5 transition-colors hover:bg-muted/60 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.3fr)_auto] lg:items-center"
+              >
+                <div className="min-w-0">
+                  <Link
+                    href={`/icps/${icp.id}`}
+                    className="block truncate text-[15px] font-semibold hover:underline focus-visible:underline focus-visible:outline-none"
+                  >
+                    {icp.name}
+                  </Link>
+                  <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">
+                    {icp.description || "No description yet"}
+                  </p>
+                  <p className="mt-2 truncate text-xs text-muted-foreground">
+                    {[icp.titles.slice(0, 3).join(", "), icp.locations.slice(0, 2).join(", ")].filter(Boolean).join(" · ") ||
+                      "Targeting not set"}
+                  </p>
+                </div>
+                <div className="min-w-0">
+                  <div className="mb-2 flex items-baseline justify-between text-xs text-muted-foreground">
+                    <span>Pipeline</span>
+                    <span className="tabular-nums">
+                      <span className="text-foreground">{icpLeads.length}</span> leads
+                    </span>
+                  </div>
+                  <PipelineStrip leads={icpLeads} />
+                </div>
+                <div className="flex items-center justify-between gap-5 lg:justify-end">
+                  <div className="text-right">
+                    <div className="text-[28px] leading-8 font-normal tabular-nums">{counts.review}</div>
+                    <div className="text-xs text-muted-foreground">to review</div>
+                  </div>
+                  <Button asChild variant={counts.review > 0 ? "default" : "outline"} size="sm">
+                    <Link href={counts.review > 0 ? `/icps/${icp.id}/review` : `/icps/${icp.id}/leads`}>
+                      {counts.review > 0 ? "Review" : "Open"} <ArrowRight />
+                    </Link>
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {!loading && icps.length > 0 && (
+          <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
+            <section className="flex flex-col rounded-lg border">
+              <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-5 pt-4 pb-2">
+                <h2 className="text-[15px] font-semibold">Needs a closer look</h2>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {attention.length} draft{attention.length === 1 ? "" : "s"} flagged or under {LOW_CONFIDENCE}
+                </span>
+              </header>
+              {attention.length === 0 ? (
+                <p className="px-5 pb-4 text-sm text-muted-foreground">Every draft waiting for review is unflagged and confident.</p>
+              ) : (
+                <ul className="divide-y divide-rule pb-1">
+                  {attention.slice(0, 3).map(({ lead, gen, icpName }) => (
+                    <li key={gen.id}>
+                      <Link
+                        href={`/icps/${lead.icpId}/review`}
+                        className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-muted/60"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{fullName(lead)}</div>
+                          <div className="truncate text-[13px] text-muted-foreground">
+                            {lead.company} · {icpName}
                           </div>
-                        ))}
-                      </dl>
-                      <StatusBar counts={counts} />
-                    </CardContent>
-                  </Card>
-                </Link>
-              )
-            })}
+                        </div>
+                        {gen.flags[0] ? (
+                          <Pill tone={gen.flags[0] === "sensitive_topic" ? "negative" : "warning"}>{FLAG_LABEL[gen.flags[0]]}</Pill>
+                        ) : (
+                          <Pill tone="warning">Low confidence</Pill>
+                        )}
+                        <ConfidenceBadge value={gen.confidence} />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {attention.length > 3 && (
+                <p className="mt-auto border-t border-rule px-5 py-2.5 text-[13px] text-muted-foreground">
+                  {attention.length - 3} more in the ICPs&apos; Review tabs, under Show only &gt; Flagged or Low confidence.
+                </p>
+              )}
+            </section>
+
+            <section className="flex flex-col rounded-lg border">
+              <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-5 pt-4 pb-2">
+                <h2 className="text-[15px] font-semibold">Ready to run</h2>
+                <span className="text-xs text-muted-foreground">Estimated cost at {settings.postsPerLead} posts per source</span>
+              </header>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-muted-foreground">
+                    <th className="px-5 pb-2 font-normal">ICP</th>
+                    <th className="px-3 pb-2 text-right font-normal">To enrich</th>
+                    <th className="px-5 pb-2 text-right font-normal">To draft</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-rule border-t border-rule">
+                  {nextRuns.map(({ icp, enrich, enrichCost, draft, draftCost }) => (
+                    <tr key={icp.id}>
+                      <td className="w-full max-w-0 px-5 py-3.5">
+                        <Link href={`/icps/${icp.id}/leads`} className="block truncate font-medium hover:underline">
+                          {icp.name}
+                        </Link>
+                      </td>
+                      <RunCell count={enrich} cost={enrichCost} className="px-3" />
+                      <RunCell count={draft} cost={draftCost} className="px-5" />
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t">
+                  <tr>
+                    <td className="px-5 py-2.5 text-muted-foreground">Total</td>
+                    <RunCell count={sum(nextRuns, "enrich")} cost={sum(nextRuns, "enrichCost")} className="px-3" />
+                    <RunCell count={sum(nextRuns, "draft")} cost={sum(nextRuns, "draftCost")} className="px-5" />
+                  </tr>
+                </tfoot>
+              </table>
+              <p className="mt-auto border-t border-rule px-5 py-2.5 text-[13px] text-muted-foreground">
+                Runs start from each ICP&apos;s Leads tab and confirm the cost first.
+              </p>
+            </section>
           </div>
         )}
       </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New ICP</DialogTitle>
-            <DialogDescription>You can fill in targeting and messaging on the next screen.</DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-3"
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (name.trim()) create()
-            }}
-          >
-            <div className="space-y-1.5">
-              <Label htmlFor="icp-name">Name</Label>
-              <Input id="icp-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. DTC skincare founders" autoFocus />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="icp-desc">Description</Label>
-              <Textarea id="icp-desc" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={!name.trim()}>
-                Create ICP
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
     </>
+  )
+}
+
+/** Estimates are shown in cents; totals are summed from the rounded figures on screen. */
+const cents = (n: number) => Math.round(n * 100) / 100
+
+function sum<T extends Record<K, number>, K extends keyof T>(rows: T[], key: K): number {
+  return rows.reduce((total, r) => total + (key.toString().endsWith("Cost") ? cents(r[key]) : r[key]), 0)
+}
+
+function RunCell({ count, cost, className }: { count: number; cost: number; className?: string }) {
+  return (
+    <td className={`py-3.5 text-right whitespace-nowrap tabular-nums ${className ?? ""}`}>
+      {count ? (
+        <>
+          {count} <span className="text-muted-foreground">· ${cents(cost).toFixed(2)}</span>
+        </>
+      ) : (
+        <span className="text-muted-foreground">–</span>
+      )}
+    </td>
   )
 }
