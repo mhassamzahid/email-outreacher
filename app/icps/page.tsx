@@ -2,12 +2,12 @@
 
 import Link from "next/link"
 import { ArrowRight, Plus, Target } from "lucide-react"
+import { BackendError } from "@/components/companies/backend-state"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
 import { ConfidenceBadge, Pill, PipelineStrip } from "@/components/status"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useMockLoading } from "@/hooks/use-mock-loading"
 import { FLAG_LABEL, fullName } from "@/lib/format"
 import { estimateEnrichmentCost, estimateGenerationCost } from "@/lib/mock-actions"
 import { generationByLead, pipeline } from "@/lib/selectors"
@@ -17,8 +17,8 @@ import type { Generation, Lead } from "@/lib/types"
 const LOW_CONFIDENCE = 60
 
 export default function IcpsPage() {
-  const { icps, leads, generations, settings } = useStore()
-  const loading = useMockLoading()
+  const { icps, icpsStatus, icpsError, reloadIcps, workspacesStatus, leads, generations, settings } = useStore()
+  const loading = icpsStatus === "loading" || workspacesStatus === "loading"
 
   const rows = icps.map((icp) => {
     const icpLeads = leads.filter((l) => l.icpId === icp.id)
@@ -66,12 +66,14 @@ export default function IcpsPage() {
         description={
           toReview > 0
             ? `${toReview} drafts waiting for review in ${waiting} ICP${waiting === 1 ? "" : "s"} · ${notEnriched} leads not enriched yet`
-            : "Nothing waiting for review"
+            : "ICPs are shared with Lead Intel. Outreach settings for each are kept per workspace."
         }
         actions={newButton}
       />
       <div className="px-4 pb-8 md:px-8">
-        {loading ? (
+        {icpsStatus === "error" ? (
+          <BackendError message={icpsError ?? ""} onRetry={reloadIcps} />
+        ) : loading ? (
           <div className="space-y-px overflow-hidden rounded-lg border">
             {[0, 1, 2].map((i) => (
               <Skeleton key={i} className="h-[104px] rounded-none" />
@@ -81,7 +83,7 @@ export default function IcpsPage() {
           <EmptyState
             icon={Target}
             title="No ICPs yet"
-            description="Create an ICP to define who you are targeting, then import leads into it."
+            description="Add one here or in Lead Intel. Either way, both projects share it."
             action={newButton}
           />
         ) : (
@@ -98,12 +100,16 @@ export default function IcpsPage() {
                   >
                     {icp.name}
                   </Link>
-                  <p className="mt-1 line-clamp-2 text-[13px] text-muted-foreground">
-                    {icp.description || "No description yet"}
-                  </p>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Pill>{icp.industry}</Pill>
+                    {!icp.enabled && <Pill tone="warning">Off in Lead Intel</Pill>}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {icp.companyCount.toLocaleString()} {icp.companyCount === 1 ? "business" : "businesses"}
+                      {icp.places.length ? ` · ${icp.places.slice(0, 2).join(", ")}` : ""}
+                    </span>
+                  </div>
                   <p className="mt-2 truncate text-xs text-muted-foreground">
-                    {[icp.titles.slice(0, 3).join(", "), icp.locations.slice(0, 2).join(", ")].filter(Boolean).join(" · ") ||
-                      "Targeting not set"}
+                    {icp.titles.length ? `Reach: ${icp.titles.slice(0, 3).join(", ")}` : "Who to reach isn't set yet"}
                   </p>
                 </div>
                 <div className="min-w-0">
@@ -131,7 +137,7 @@ export default function IcpsPage() {
           </ul>
         )}
 
-        {!loading && icps.length > 0 && (
+        {!loading && icpsStatus !== "error" && icps.length > 0 && (
           <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2">
             <section className="flex flex-col rounded-lg border">
               <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-5 pt-4 pb-2">

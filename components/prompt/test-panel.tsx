@@ -31,7 +31,7 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
   const [running, setRunning] = useState(false)
   const [result, setResult] = useState<PromptTestResult | null>(null)
 
-  if (!icp) return <p className="text-sm text-muted-foreground">Create an ICP to test prompts against.</p>
+  if (!icp) return <p className="text-sm text-muted-foreground">Add an ICP to test prompts against.</p>
 
   const leadItems = lead ? items.filter((it) => it.leadId === lead.id) : []
   const choice = lead ? chooseHookItem(icp.id, leadItems) : null

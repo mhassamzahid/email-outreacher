@@ -12,6 +12,7 @@ import type {
   Generation,
   GenerationStatus,
   ICP,
+  IcpOutreach,
   Lead,
   LeadStatus,
   PromptKind,
@@ -66,8 +67,21 @@ interface Store {
   enrichJobs: Record<string, EnrichmentJob>
   genJobs: Record<string, GenerationJob>
 
-  createIcp: (input: Omit<ICP, "id" | "createdAt" | "updatedAt">) => ICP
-  updateIcp: (id: string, patch: Partial<ICP>) => void
+  /** Lead Intel's ICPs with this workspace's outreach settings. Empty until loaded; see icpsStatus. */
+  icpsStatus: "loading" | "ready" | "error"
+  icpsError: string | null
+  reloadIcps: () => void
+  /**
+   * Change an ICP's outreach settings. Saved to the backend (Lead Intel's own fields are never sent);
+   * prompt choices stay in this browser until prompts live in the backend. Rejects if the save fails.
+   */
+  updateIcp: (id: string, patch: Partial<IcpOutreach>) => Promise<void>
+  /**
+   * Add an ICP to Lead Intel (shared by both projects), then save this workspace's outreach settings
+   * for it if any were given. Rejects with the backend's reason (e.g. a name that's taken) if the ICP
+   * wasn't created. If it was but the outreach settings didn't save, resolves with a `warning`.
+   */
+  createIcp: (input: api.IcpCreate, outreach?: Partial<IcpOutreach>) => Promise<{ icp: ICP; warning?: string }>
   addLeads: (leads: Lead[]) => void
   moveLeads: (ids: string[], icpId: string) => void
   deleteLeads: (ids: string[]) => void
@@ -135,7 +149,10 @@ const LEAD_STATUS_FOR: Record<GenerationStatus, LeadStatus> = {
 }
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [icps, setIcps] = useState(mock.icps)
+  const [icps, setIcps] = useState<ICP[]>([])
+  const [icpsStatus, setIcpsStatus] = useState<Store["icpsStatus"]>("loading")
+  const [icpsError, setIcpsError] = useState<string | null>(null)
+  const [icpsTick, setIcpsTick] = useState(0)
   const [leads, setLeads] = useState(mock.leads)
   const [items, setItems] = useState(mock.enrichmentItems)
   const [generations, setGenerations] = useState(mock.generations)
@@ -196,17 +213,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const addSpend = (usd: number) =>
     setSettings((s) => ({ ...s, spentThisMonthUsd: Math.round((s.spentThisMonthUsd + usd) * 10000) / 10000 }))
 
-  const createIcp: Store["createIcp"] = (input) => {
-    const now = new Date().toISOString()
-    const icp: ICP = { ...input, name: input.name.trim(), id: uid("icp"), createdAt: now, updatedAt: now }
-    setIcps((list) => [...list, icp])
-    return icp
+  // ICPs come from Lead Intel (shared with it) plus this workspace's outreach settings, so they
+  // reload whenever the workspace changes. Prompt choices made in this browser survive the reload.
+  useEffect(() => {
+    if (!currentWorkspaceId) return
+    let live = true
+    api
+      .fetchIcps(currentWorkspaceId)
+      .then((list) => {
+        if (!live) return
+        setIcps((previous) =>
+          list.map((raw) => {
+            const icp = api.toIcp(raw)
+            const before = previous.find((p) => p.id === icp.id)
+            return before ? { ...icp, hookPromptId: before.hookPromptId, emailPromptId: before.emailPromptId } : icp
+          }),
+        )
+        setIcpsStatus("ready")
+        setIcpsError(null)
+      })
+      .catch((e: unknown) => {
+        if (!live) return
+        setIcpsStatus("error")
+        setIcpsError(e instanceof Error ? e.message : "Couldn't load ICPs.")
+      })
+    return () => {
+      live = false
+    }
+  }, [currentWorkspaceId, icpsTick])
+
+  const reloadIcps = useCallback(() => {
+    setIcpsStatus("loading")
+    setIcpsTick((t) => t + 1)
+  }, [])
+
+  const createIcp: Store["createIcp"] = async (input, outreach) => {
+    let icp = api.toIcp(await api.createIcp(input))
+    let warning: string | undefined
+    if (outreach && Object.keys(outreach).length) {
+      try {
+        const saved = await api.saveIcpOutreach(currentWorkspaceId, icp.id, { ...icp, ...outreach })
+        icp = { ...icp, ...outreach, updatedAt: saved.updatedAt }
+      } catch (e) {
+        warning = `The ICP was created, but who to reach wasn't saved: ${e instanceof Error ? e.message : "unknown error"}`
+      }
+    }
+    setIcps((list) => [...list, icp].sort((a, b) => a.priority - b.priority))
+    return { icp, warning }
   }
 
-  const updateIcp: Store["updateIcp"] = (id, patch) =>
-    setIcps((list) =>
-      list.map((icp) => (icp.id === id ? { ...icp, ...patch, updatedAt: new Date().toISOString() } : icp)),
-    )
+  const updateIcp: Store["updateIcp"] = async (id, patch) => {
+    const current = icps.find((i) => i.id === id)
+    if (!current) return
+    const next: ICP = { ...current, ...patch }
+    const promptOnly = Object.keys(patch).every((k) => k === "hookPromptId" || k === "emailPromptId")
+    if (!promptOnly) {
+      const saved = await api.saveIcpOutreach(currentWorkspaceId, id, next)
+      next.updatedAt = saved.updatedAt
+    }
+    setIcps((list) => list.map((icp) => (icp.id === id ? next : icp)))
+  }
 
   const addLeads: Store["addLeads"] = (newLeads) => setLeads((list) => [...list, ...newLeads])
 
@@ -493,8 +559,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setSettings,
         enrichJobs,
         genJobs,
-        createIcp,
+        icpsStatus,
+        icpsError,
+        reloadIcps,
         updateIcp,
+        createIcp,
         addLeads,
         moveLeads,
         deleteLeads,

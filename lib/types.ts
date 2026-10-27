@@ -4,14 +4,49 @@ export const SOURCES: Source[] = ["linkedin", "instagram", "facebook", "website"
 
 export type MediaType = "text" | "image" | "video" | "carousel" | "article" | "page"
 
+/** Which text a Lead Intel ICP rule reads. Empty `sources` means all of them. */
+export type IcpSource =
+  | "business_name"
+  | "website_text"
+  | "website_domain"
+  | "instagram_bio"
+  | "instagram_category"
+  | "instagram_handle"
+  | "meta_ads_text"
+
+/**
+ * An ICP. The ICP itself lives in Lead Intel and is shared by both projects: every field in the first
+ * block is Lead Intel's, read-only here. The second block is this workspace's outreach settings for
+ * it, saved in outreach.eo_icp_profiles.
+ */
 export interface ICP {
   id: string
+  // ---- Lead Intel (shared, read-only here) ----
   name: string
+  industry: string
+  /** Lower is checked first when rules overlap. */
+  priority: number
+  enabled: boolean
+  sources: IcpSource[]
+  anyOf: string[]
+  noneOf: string[]
+  websiteAnyOf: string[]
+  instagramAnyOf: string[]
+  /** false: any filled-in group may match. true: every filled-in group must. */
+  requireAll: boolean
+  minFollowers: number | null
+  maxFollowers: number | null
+  /** What Lead Intel searches Google Maps with. */
+  searchTerms: string[]
+  requiresWebsite: boolean
+  minReviews: number | null
+  places: string[]
+  /** Contactable businesses Lead Intel has matched to it. */
+  companyCount: number
+  // ---- Outreach settings (this workspace) ----
   description: string
+  /** Who to write to at each company. */
   titles: string[]
-  industries: string[]
-  companySize: string
-  locations: string[]
   pains: string
   offer: string
   proof: string
@@ -28,6 +63,24 @@ export interface ICP {
   createdAt: string
   updatedAt: string
 }
+
+/** The outreach half of an ICP: what this app can change. */
+export type IcpOutreach = Pick<
+  ICP,
+  | "description"
+  | "titles"
+  | "pains"
+  | "offer"
+  | "proof"
+  | "cta"
+  | "tone"
+  | "exampleEmail"
+  | "wordsToAvoid"
+  | "hookGuidance"
+  | "enabledSources"
+  | "hookPromptId"
+  | "emailPromptId"
+>
 
 export type LeadStatus =
   | "imported"

@@ -4,27 +4,23 @@ import type { ReactNode } from "react"
 import { Plus } from "lucide-react"
 import { SourceIcon } from "@/components/source-icon"
 import { TagInput } from "@/components/tag-input"
-import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { SOURCE_LABEL, formatUsd } from "@/lib/format"
 import { costPerLeadForSource } from "@/lib/mock-actions"
-import type { ICP } from "@/lib/types"
+import type { ICP, IcpOutreach, IcpSource } from "@/lib/types"
 import { SOURCES } from "@/lib/types"
 
-// Shared by the Definition tab (editing) and the New ICP page (creating), so both stay in step.
+// The editable half of an ICP: this workspace's outreach settings. The ICP itself (name, industry,
+// matching rule) belongs to Lead Intel and is shown read-only by LeadIntelRule.
 
-export type IcpDraft = Omit<ICP, "id" | "createdAt" | "updatedAt" | "hookPromptId" | "emailPromptId">
+export type IcpDraft = Omit<IcpOutreach, "hookPromptId" | "emailPromptId">
 export type SetDraft = <K extends keyof IcpDraft>(key: K, value: IcpDraft[K]) => void
 
 export const toDraft = (icp: ICP): IcpDraft => ({
-  name: icp.name,
   description: icp.description,
   titles: icp.titles,
-  industries: icp.industries,
-  companySize: icp.companySize,
-  locations: icp.locations,
   pains: icp.pains,
   offer: icp.offer,
   proof: icp.proof,
@@ -34,24 +30,6 @@ export const toDraft = (icp: ICP): IcpDraft => ({
   wordsToAvoid: icp.wordsToAvoid,
   hookGuidance: icp.hookGuidance,
   enabledSources: icp.enabledSources,
-})
-
-export const emptyDraft = (): IcpDraft => ({
-  name: "",
-  description: "",
-  titles: [],
-  industries: [],
-  companySize: "",
-  locations: [],
-  pains: "",
-  offer: "",
-  proof: "",
-  cta: "",
-  tone: "",
-  exampleEmail: "",
-  wordsToAvoid: "",
-  hookGuidance: "",
-  enabledSources: ["linkedin", "website"],
 })
 
 /** Messaging fields in the order the email prompt reads them, with how each one is used. */
@@ -128,9 +106,18 @@ export const MESSAGING_FIELDS: {
 ]
 
 export const SUGGESTIONS = {
-  titles: ["Founder", "Co-founder", "CEO", "Head of Growth", "Head of Marketing", "Head of Ecommerce", "Marketing Director", "COO"],
-  industries: ["Apparel", "Fashion", "Activewear", "Footwear", "Beauty", "B2B SaaS", "Real estate"],
-  locations: ["United States", "Canada", "United Kingdom", "Australia"],
+  titles: ["Owner", "Founder", "Co-founder", "CEO", "President", "General Manager", "Marketing Director", "Operations Manager"],
+}
+
+/** Lead Intel's own words for each source its ICP rules read. */
+export const ICP_SOURCE_LABELS: Record<IcpSource, string> = {
+  business_name: "Their business name",
+  website_text: "Text on their website",
+  website_domain: "Their web address",
+  instagram_bio: "Their Instagram bio",
+  instagram_category: "The category Instagram lists them under",
+  instagram_handle: "Their Instagram username",
+  meta_ads_text: "The wording of their ads",
 }
 
 export function Field({
@@ -181,69 +168,99 @@ function Suggestions({ options, value, onAdd }: { options: string[]; value: stri
   )
 }
 
-export function BasicsFields({
-  draft,
-  set,
-  nameError,
-  onNameBlur,
-  autoFocus,
-}: {
-  draft: IcpDraft
-  set: SetDraft
-  nameError?: string
-  onNameBlur?: () => void
-  autoFocus?: boolean
-}) {
+export function BasicsFields({ draft, set }: { draft: IcpDraft; set: SetDraft }) {
   return (
-    <div className="grid gap-4">
-      <Field id="name" label="Name" error={nameError} hint="Who this is, in a few words. Shown across the app and in prompts as {{icp.name}}.">
-        <Input
-          id="name"
-          value={draft.name}
-          onChange={(e) => set("name", e.target.value)}
-          onBlur={onNameBlur}
-          placeholder="e.g. US activewear brands on Shopify"
-          aria-invalid={!!nameError || undefined}
-          aria-describedby="name-note"
-          autoFocus={autoFocus}
-        />
-      </Field>
-      <Field id="description" label="Description" hint="For your team. Not sent to the model.">
-        <Textarea
-          id="description"
-          rows={2}
-          value={draft.description}
-          onChange={(e) => set("description", e.target.value)}
-          placeholder="Which companies, what stage, and why they're a fit"
-        />
-      </Field>
+    <Field id="description" label="Description" hint="For your team. Not sent to the model.">
+      <Textarea
+        id="description"
+        rows={2}
+        value={draft.description}
+        onChange={(e) => set("description", e.target.value)}
+        placeholder="Who you're reaching at these companies, and why"
+      />
+    </Field>
+  )
+}
+
+export function TargetingFields({ draft, set }: { draft: IcpDraft; set: SetDraft }) {
+  return (
+    <Field
+      id="titles"
+      label="Job titles to reach"
+      hint="Who to email at each company. Used to find stakeholders in Apollo and in prompts as {{icp.titles}}."
+    >
+      <TagInput id="titles" value={draft.titles} onChange={(v) => set("titles", v)} placeholder="Owner, Founder" />
+      <Suggestions options={SUGGESTIONS.titles} value={draft.titles} onAdd={(t) => set("titles", [...draft.titles, t])} />
+    </Field>
+  )
+}
+
+function RuleRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid gap-1 py-2 sm:grid-cols-[180px_1fr] sm:gap-4">
+      <dt className="text-[13px] text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 text-sm">{children}</dd>
     </div>
   )
 }
 
-export function TargetingFields({ draft, set, suggestions }: { draft: IcpDraft; set: SetDraft; suggestions?: boolean }) {
-  const tags = (key: "titles" | "industries" | "locations", label: string, placeholder: string, hint: string) => (
-    <Field id={key} label={label} hint={hint}>
-      <TagInput id={key} value={draft[key]} onChange={(v) => set(key, v)} placeholder={placeholder} />
-      {suggestions && (
-        <Suggestions options={SUGGESTIONS[key]} value={draft[key]} onAdd={(t) => set(key, [...draft[key], t])} />
-      )}
-    </Field>
-  )
+function Terms({ terms, empty }: { terms: string[]; empty: string }) {
+  if (!terms.length) return <span className="text-muted-foreground">{empty}</span>
   return (
-    <div className="grid gap-5 md:grid-cols-2">
-      {tags("titles", "Job titles", "Founder, CEO", "Who you write to. Enter or comma adds a tag.")}
-      {tags("industries", "Industries", "Apparel", "Used to frame the email and pick hooks.")}
-      <Field id="companySize" label="Company size" hint="Employees, as a range.">
-        <Input
-          id="companySize"
-          value={draft.companySize}
-          onChange={(e) => set("companySize", e.target.value)}
-          placeholder="10–50"
-        />
-      </Field>
-      {tags("locations", "Locations", "United States", "Countries, states or cities.")}
-    </div>
+    <span className="flex flex-wrap gap-1">
+      {terms.map((t) => (
+        <span key={t} className="rounded-[4px] bg-muted px-1.5 text-[13px] leading-5">
+          {t}
+        </span>
+      ))}
+    </span>
+  )
+}
+
+/** Lead Intel's definition of the ICP, exactly as stored there. Read-only: it's edited in Lead Intel. */
+export function LeadIntelRule({ icp }: { icp: ICP }) {
+  const range = (min: number | null, max: number | null, unit: string) =>
+    min === null && max === null
+      ? "Any"
+      : min !== null && max !== null
+        ? `${min.toLocaleString()}–${max.toLocaleString()} ${unit}`
+        : min !== null
+          ? `At least ${min.toLocaleString()} ${unit}`
+          : `At most ${max!.toLocaleString()} ${unit}`
+  return (
+    <dl className="divide-y divide-rule">
+      <RuleRow label="Industry">{icp.industry}</RuleRow>
+      <RuleRow label="Order">
+        {icp.priority} <span className="text-muted-foreground">· lower is checked first</span>
+        {!icp.enabled && <span className="ml-2 text-warning">Turned off in Lead Intel</span>}
+      </RuleRow>
+      <RuleRow label="Searched on Google Maps">
+        <Terms terms={icp.searchTerms} empty="Not sourced, only matched" />
+      </RuleRow>
+      <RuleRow label="Reads">
+        {icp.sources.length ? icp.sources.map((s) => ICP_SOURCE_LABELS[s] ?? s).join(", ") : "Everything"}
+      </RuleRow>
+      <RuleRow label="Any of these words">
+        <Terms terms={icp.anyOf} empty="None" />
+      </RuleRow>
+      <RuleRow label="On their website">
+        <Terms terms={icp.websiteAnyOf} empty="None" />
+      </RuleRow>
+      <RuleRow label="On their Instagram">
+        <Terms terms={icp.instagramAnyOf} empty="None" />
+      </RuleRow>
+      <RuleRow label="Groups that must match">{icp.requireAll ? "Every filled-in group" : "Any filled-in group"}</RuleRow>
+      <RuleRow label="Never these words">
+        <Terms terms={icp.noneOf} empty="None" />
+      </RuleRow>
+      <RuleRow label="Instagram followers">{range(icp.minFollowers, icp.maxFollowers, "followers")}</RuleRow>
+      <RuleRow label="Google reviews">{icp.minReviews === null ? "Any" : `At least ${icp.minReviews}`}</RuleRow>
+      <RuleRow label="Needs a website">{icp.requiresWebsite ? "Yes" : "No"}</RuleRow>
+      <RuleRow label="Places">
+        <Terms terms={icp.places} empty="Anywhere" />
+      </RuleRow>
+      <RuleRow label="Businesses in it">{icp.companyCount.toLocaleString()}</RuleRow>
+    </dl>
   )
 }
 

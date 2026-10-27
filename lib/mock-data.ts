@@ -57,7 +57,7 @@ export function leadSources(lead: Lead): Source[] {
 
 export const DEFAULT_HOOK_SYSTEM = `You pick the single best personalization hook for a cold email. You are precise and conservative: a weak or risky hook is worse than no hook.`
 
-export const DEFAULT_HOOK_USER = `We sell to this ICP: {{icp.name}} ({{icp.titles}} in {{icp.industries}}).
+export const DEFAULT_HOOK_USER = `We sell to this ICP: {{icp.name}} ({{icp.titles}} in {{icp.industry}}).
 Their main pains: {{icp.pains}}
 Our offer: {{icp.offer}}
 Hook guidance: {{icp.hookGuidance}}
@@ -121,7 +121,7 @@ Pick the item that best connects to our offer and write a one sentence hook refe
 Return JSON only:
 { "chosen_item": <item number or null>, "hook": "<one sentence>", "relevance": <0-5> }`
 
-const HOOK_USER_V2 = `We sell to this ICP: {{icp.name}} ({{icp.titles}} in {{icp.industries}}).
+const HOOK_USER_V2 = `We sell to this ICP: {{icp.name}} ({{icp.titles}} in {{icp.industry}}).
 Their main pains: {{icp.pains}}
 Our offer: {{icp.offer}}
 
@@ -188,7 +188,7 @@ Return JSON only:
 
 export const DEFAULT_SCORE_SYSTEM = `You score how safe and worthwhile a cold email is to send without a person checking it first. You are strict: when unsure, score lower so a person reviews it.`
 
-export const DEFAULT_SCORE_USER = `ICP: {{icp.name}} ({{icp.titles}} in {{icp.industries}})
+export const DEFAULT_SCORE_USER = `ICP: {{icp.name}} ({{icp.titles}} in {{icp.industry}})
 Pains: {{icp.pains}}
 Offer: {{icp.offer}}
 Proof we can claim: {{icp.proof}}
@@ -295,15 +295,33 @@ export const promptVersions: PromptVersion[] = [
 // ICPs
 // ---------------------------------------------------------------------------
 
+/** Sample ICPs behind the sample leads and drafts. Real ICPs come from Lead Intel through the backend. */
+const SAMPLE_RULE = {
+  priority: 100,
+  enabled: true,
+  sources: [],
+  anyOf: [],
+  noneOf: [],
+  websiteAnyOf: [],
+  instagramAnyOf: [],
+  requireAll: false,
+  minFollowers: null,
+  maxFollowers: null,
+  searchTerms: [],
+  requiresWebsite: false,
+  minReviews: null,
+  companyCount: 0,
+} satisfies Partial<ICP>
+
 export const icps: ICP[] = [
   {
     id: "icp_saas",
     name: "B2B SaaS founders (10–50 employees)",
+    ...SAMPLE_RULE,
     description: "Founder-led SaaS companies between seed and Series A that have not built a repeatable outbound motion yet.",
     titles: ["Founder", "Co-founder", "CEO"],
-    industries: ["B2B SaaS", "Dev tools", "Fintech", "HR tech"],
-    companySize: "10–50",
-    locations: ["United States", "Canada", "United Kingdom"],
+    industry: "B2B SaaS",
+    places: ["United States", "Canada", "United Kingdom"],
     pains: "Founders are still the whole sales team. Pipeline is lumpy month to month. First sales hires ramp slowly because there is no outbound playbook to inherit.",
     offer: "We set up and run outbound for SaaS teams under 50 people: targeting, copy and sending infrastructure, with the founder approving every message.",
     proof: "We work with seed and Series A SaaS teams in dev tools, fintech and HR tech. References available on request.",
@@ -321,11 +339,11 @@ export const icps: ICP[] = [
   {
     id: "icp_uae_re",
     name: "Real estate agencies, UAE",
+    ...SAMPLE_RULE,
     description: "RERA-registered brokerages in Dubai and Abu Dhabi with 10+ agents and meaningful portal spend.",
     titles: ["Managing Director", "CEO", "Founder", "Head of Sales", "Sales Director"],
-    industries: ["Real estate brokerage", "Off-plan sales", "Property management"],
-    companySize: "10–200",
-    locations: ["Dubai", "Abu Dhabi"],
+    industry: "Real estate brokerage",
+    places: ["Dubai", "Abu Dhabi"],
     pains: "Portal leads go cold before an agent replies. Agents cherry-pick leads. Management has no visibility on response times. Portal spend is high with unclear return.",
     offer: "We set up WhatsApp and CRM follow-up so every portal lead gets a reply within minutes, day or night, and agents only handle qualified viewings.",
     proof: "Working with RERA-registered brokerages in Dubai and Abu Dhabi. Happy to share a walkthrough of a live setup.",
@@ -343,11 +361,11 @@ export const icps: ICP[] = [
   {
     id: "icp_ecom",
     name: "E-commerce brand owners",
+    ...SAMPLE_RULE,
     description: "US apparel and fashion DTC brands on Shopify, spending on Meta and feeling the squeeze on ROAS.",
     titles: ["Founder", "Co-founder", "CEO", "Head of Growth", "Head of Ecommerce"],
-    industries: ["Apparel", "Fashion", "Activewear", "Footwear"],
-    companySize: "5–100",
-    locations: ["United States"],
+    industry: "Apparel",
+    places: ["United States"],
     pains: "Rising Meta CPMs and sliding ROAS. Creative fatigue. Low AOV. Discount dependence around BFCM that hurts Q1 margins.",
     offer: "Meta ads and landing page CRO for apparel brands, focused on profitable new customer acquisition and higher AOV.",
     proof: "We work with US apparel and fashion brands on Meta ads, CRO, offers and AOV. Case studies available on request.",

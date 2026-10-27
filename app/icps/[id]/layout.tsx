@@ -4,7 +4,9 @@ import Link from "next/link"
 import { notFound, usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { ChevronRight } from "lucide-react"
+import { BackendError } from "@/components/companies/backend-state"
 import { PageHeader } from "@/components/page-header"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PipelineStrip } from "@/components/status"
 import { useIcpParam } from "@/hooks/use-icp"
 import { pipeline } from "@/lib/selectors"
@@ -14,8 +16,22 @@ import { cn } from "@/lib/utils"
 export default function IcpLayout({ children }: { children: ReactNode }) {
   const icp = useIcpParam()
   const pathname = usePathname()
-  const { leads } = useStore()
+  const { leads, icpsStatus, icpsError, reloadIcps } = useStore()
 
+  // ICPs load from the backend; only call it missing once they have.
+  if (!icp && icpsStatus === "error")
+    return (
+      <div className="px-4 pt-6 md:px-8">
+        <BackendError message={icpsError ?? ""} onRetry={reloadIcps} />
+      </div>
+    )
+  if (!icp && icpsStatus === "loading")
+    return (
+      <div className="space-y-4 px-4 pt-6 md:px-8">
+        <Skeleton className="h-8 w-72" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    )
   if (!icp) notFound()
 
   const icpLeads = leads.filter((l) => l.icpId === icp.id)
@@ -38,7 +54,7 @@ export default function IcpLayout({ children }: { children: ReactNode }) {
         <span className="truncate">{icp.name}</span>
       </nav>
       <div className="-mt-4 md:-mt-5">
-        <PageHeader title={icp.name} description={icp.description}>
+        <PageHeader title={icp.name} description={icp.description || `${icp.industry} · from Lead Intel`}>
           <PipelineStrip leads={icpLeads} className="max-w-3xl" />
         </PageHeader>
       </div>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { BasicsFields, MessagingFields, SourcesFields, TargetingFields, toDraft, type IcpDraft } from "@/components/icp-form"
+import { BasicsFields, LeadIntelRule, MessagingFields, SourcesFields, TargetingFields, toDraft, type IcpDraft } from "@/components/icp-form"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,7 @@ export default function DefinitionPage() {
 function DefinitionForm({ icp }: { icp: ICP }) {
   const { updateIcp, settings } = useStore()
   const [draft, setDraft] = useState<IcpDraft>(() => toDraft(icp))
+  const [saving, setSaving] = useState(false)
   const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(icp))
 
   useEffect(() => {
@@ -30,13 +31,16 @@ function DefinitionForm({ icp }: { icp: ICP }) {
 
   const set = <K extends keyof IcpDraft>(key: K, value: IcpDraft[K]) => setDraft((d) => ({ ...d, [key]: value }))
 
-  const save = () => {
-    if (!draft.name.trim()) {
-      toast.error("Give the ICP a name before saving")
-      return
+  const save = async () => {
+    setSaving(true)
+    try {
+      await updateIcp(icp.id, draft)
+      toast.success("Outreach settings saved")
+    } catch (e) {
+      toast.error("Couldn't save", { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setSaving(false)
     }
-    updateIcp(icp.id, draft)
-    toast.success("ICP saved")
   }
 
   return (
@@ -50,11 +54,11 @@ function DefinitionForm({ icp }: { icp: ICP }) {
           <span className="text-xs text-muted-foreground">All changes saved</span>
         )}
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" disabled={!dirty} onClick={() => setDraft(toDraft(icp))}>
+          <Button variant="outline" disabled={!dirty || saving} onClick={() => setDraft(toDraft(icp))}>
             Discard
           </Button>
-          <Button disabled={!dirty} onClick={save}>
-            Save changes
+          <Button disabled={!dirty || saving} onClick={() => void save()}>
+            {saving ? "Saving…" : "Save changes"}
           </Button>
         </div>
       </div>
@@ -63,19 +67,24 @@ function DefinitionForm({ icp }: { icp: ICP }) {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Basics</CardTitle>
+              <CardTitle>Lead Intel definition</CardTitle>
+              <CardDescription>
+                This ICP is shared with Lead Intel and edited there. These are its fields, exactly as Lead Intel stores
+                them.
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <BasicsFields draft={draft} set={set} nameError={draft.name.trim() ? "" : "Give the ICP a name."} />
+              <LeadIntelRule icp={icp} />
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Targeting</CardTitle>
-              <CardDescription>Who this ICP covers.</CardDescription>
+              <CardTitle>Who to reach</CardTitle>
+              <CardDescription>Outreach settings for this workspace. Saved here, never in Lead Intel.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-5">
               <TargetingFields draft={draft} set={set} />
+              <BasicsFields draft={draft} set={set} />
             </CardContent>
           </Card>
           <Card>

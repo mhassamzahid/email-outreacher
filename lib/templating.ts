@@ -7,7 +7,8 @@ const PLACEHOLDER = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g
 const ICP_VARS = [
   "icp.name",
   "icp.titles",
-  "icp.industries",
+  "icp.industry",
+  "icp.places",
   "icp.pains",
   "icp.offer",
   "icp.proof",
@@ -79,7 +80,8 @@ export function buildVariables(ctx: RenderContext): Record<string, string> {
   const vars: Record<string, string> = {
     "icp.name": icp.name,
     "icp.titles": icp.titles.join(", "),
-    "icp.industries": icp.industries.join(", "),
+    "icp.industry": icp.industry,
+    "icp.places": icp.places.join(", "),
     "icp.pains": icp.pains,
     "icp.offer": icp.offer,
     "icp.proof": icp.proof,

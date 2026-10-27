@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import type { Company, LeadIntelIcp, Workspace } from "./types"
+import type { Company, ICP, IcpOutreach, Source, Workspace } from "./types"
 
 // The backend. Pages that use it fetch on mount and show their own loading and error states;
 // everything else in the app still runs on sample data from lib/mock-data.ts.
@@ -92,7 +92,69 @@ export interface ApiCompany extends Company {
   importedAt: string | null
 }
 
-export const fetchIcps = () => api<(LeadIntelIcp & { companyCount: number })[]>("/icps")
+/** This workspace's outreach settings for an ICP, as the backend stores them (eo_icp_profiles). */
+export interface ApiIcpProfile extends Omit<IcpOutreach, "hookPromptId" | "emailPromptId"> {
+  hookPromptId: string | null
+  emailPromptId: string | null
+  updatedAt: string
+}
+
+/** A Lead Intel ICP as the backend returns it, with this workspace's profile when there is one. */
+export interface ApiIcp
+  extends Pick<
+    ICP,
+    | "id" | "name" | "industry" | "priority" | "enabled" | "sources" | "anyOf" | "noneOf" | "websiteAnyOf"
+    | "instagramAnyOf" | "requireAll" | "minFollowers" | "maxFollowers" | "searchTerms" | "requiresWebsite"
+    | "minReviews" | "places" | "companyCount" | "createdAt" | "updatedAt"
+  > {
+  profile: ApiIcpProfile | null
+}
+
+const EMPTY_OUTREACH: IcpOutreach = {
+  description: "",
+  titles: [],
+  pains: "",
+  offer: "",
+  proof: "",
+  cta: "",
+  tone: "",
+  exampleEmail: "",
+  wordsToAvoid: "",
+  hookGuidance: "",
+  enabledSources: ["linkedin", "website"],
+  hookPromptId: null,
+  emailPromptId: null,
+}
+
+/** One ICP for the app: Lead Intel's fields plus this workspace's outreach settings (or empty ones). */
+export function toIcp(api: ApiIcp): ICP {
+  const { profile, ...leadIntel } = api
+  const outreach = profile ? { ...EMPTY_OUTREACH, ...profile, enabledSources: profile.enabledSources as Source[] } : EMPTY_OUTREACH
+  return { ...leadIntel, ...outreach, updatedAt: profile?.updatedAt ?? api.updatedAt }
+}
+
+/**
+ * Save the outreach half of an ICP. Lead Intel's own fields are never sent.
+ * Prompt choices stay in the browser for now: prompts don't live in the backend yet.
+ */
+export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: IcpOutreach) => {
+  const body = {
+    description: outreach.description,
+    titles: outreach.titles,
+    pains: outreach.pains,
+    offer: outreach.offer,
+    proof: outreach.proof,
+    cta: outreach.cta,
+    tone: outreach.tone,
+    exampleEmail: outreach.exampleEmail,
+    wordsToAvoid: outreach.wordsToAvoid,
+    hookGuidance: outreach.hookGuidance,
+    enabledSources: outreach.enabledSources,
+  }
+  return api<ApiIcpProfile>(`/icps/${icpId}/profile`, { workspaceId, method: "PUT", body })
+}
+
+export const fetchIcps = (workspaceId?: string) => api<ApiIcp[]>("/icps", { workspaceId })
 
 export const fetchCompanies = (workspaceId: string, scope?: "inWorkspace") =>
   apiAll<ApiCompany>(scope ? "/companies?inWorkspace=true" : "/companies", workspaceId)
@@ -127,6 +189,10 @@ export const deleteWorkspace = (id: string) => api<void>(`/workspaces/${id}`, { 
 export interface Stakeholder {
   id: string
   companyId: string | null
+  /** The Lead Intel ICP whose search found them, if found by ICP. */
+  icpId: string | null
+  /** Their employer as Apollo names it. */
+  organizationName: string | null
   source: string
   firstName: string
   /** Masked ("Mo***n") until revealed. */
@@ -178,3 +244,32 @@ export const searchStakeholders = (
 
 export const revealStakeholders = (workspaceId: string, stakeholderIds: string[]) =>
   api<StakeholderRevealResult>("/stakeholders/reveal", { workspaceId, method: "POST", body: { stakeholderIds } })
+
+export interface IcpSearch {
+  icpId: string
+  titles: string[]
+  seniorities: string[]
+  locations: string[]
+  keywords: string
+  employeeRanges: string[]
+  verifiedEmailOnly: boolean
+  perPage: number
+  page: number
+}
+
+export const searchByIcp = (workspaceId: string, body: IcpSearch) =>
+  api<{ found: number; new: number; totalAtApollo: number | null; page: number; error: string | null }>(
+    "/stakeholders/search-icp",
+    { workspaceId, method: "POST", body },
+  )
+
+export const fetchAllStakeholders = (workspaceId: string) => api<Stakeholder[]>("/stakeholders", { workspaceId })
+
+/** A new ICP: exactly Lead Intel's fields. Added to Lead Intel's icps table, shared by both projects. */
+export type IcpCreate = Pick<
+  ICP,
+  | "name" | "industry" | "priority" | "enabled" | "sources" | "anyOf" | "noneOf" | "websiteAnyOf" | "instagramAnyOf"
+  | "requireAll" | "minFollowers" | "maxFollowers" | "searchTerms" | "requiresWebsite" | "minReviews" | "places"
+>
+
+export const createIcp = (body: IcpCreate) => api<ApiIcp>("/icps", { method: "POST", body })
