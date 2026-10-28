@@ -17,16 +17,21 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, opts: { workspaceId?: string | null; method?: string; body?: unknown } = {}): Promise<T> {
+/** A backend call. `body` is sent as JSON; `csv` as a CSV file's text. */
+export async function api<T>(
+  path: string,
+  opts: { workspaceId?: string | null; method?: string; body?: unknown; csv?: string } = {},
+): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${API_URL}/api/v1${path}`, {
       method: opts.method ?? "GET",
       headers: {
         ...(opts.body !== undefined && { "Content-Type": "application/json" }),
+        ...(opts.csv !== undefined && { "Content-Type": "text/csv" }),
         ...(opts.workspaceId && { "X-Workspace-Id": opts.workspaceId }),
       },
-      body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      body: opts.csv !== undefined ? opts.csv : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
   } catch {
     throw new ApiError(`Can't reach the backend at ${API_URL}. Is it running?`, 0)
@@ -532,3 +537,45 @@ export const fetchResearchSettings = (workspaceId: string) => api<ResearchSettin
 
 export const saveResearchSettings = (workspaceId: string, body: ResearchSettings) =>
   api<ResearchSettings>("/settings/research", { workspaceId, method: "PUT", body })
+
+// ---------- People added by hand or from a CSV (Apollo's export format) ----------
+
+export const PEOPLE_TEMPLATE_URL = `${API_URL}/api/v1/stakeholders/template.csv`
+
+export interface PersonInput {
+  icpId: string | null
+  firstName: string
+  lastName: string
+  title: string
+  company: string
+  email: string
+  linkedinUrl: string
+  website: string
+}
+
+export const addPerson = (workspaceId: string, person: PersonInput) =>
+  api<{ person: Stakeholder; new: boolean; leadCreated: boolean; companyName: string | null }>("/stakeholders", {
+    workspaceId,
+    method: "POST",
+    body: person,
+  })
+
+export interface PeopleImportResult {
+  dryRun: boolean
+  totalRows: number
+  valid: number
+  added: number
+  updated: number
+  leadsCreated: number
+  linkedToCompanies: number
+  duplicatesInFile: number
+  errors: { row: number; reason: string }[]
+  columns: Record<string, string>
+}
+
+export const importPeople = (workspaceId: string, csv: string, icpId: string | null, dryRun: boolean) =>
+  api<PeopleImportResult>(`/stakeholders/import?dryRun=${dryRun}${icpId ? `&icpId=${icpId}` : ""}`, {
+    workspaceId,
+    method: "POST",
+    csv,
+  })

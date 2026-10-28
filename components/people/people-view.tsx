@@ -3,12 +3,13 @@
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { ExternalLink, MailCheck, Newspaper, Search, Sparkles, UserPlus, UserSearch } from "lucide-react"
+import { ExternalLink, FileUp, MailCheck, Newspaper, Search, Sparkles, UserPlus, UserSearch } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
+import { AddPersonDialog, ImportPeopleDialog } from "@/components/people/add-people"
 import { PostsSheet } from "@/components/people/posts-sheet"
 import { Pill, type PillTone } from "@/components/status"
 import { TableSkeleton } from "@/components/table-skeleton"
@@ -83,6 +84,7 @@ function PeopleList({ wsId }: { wsId: string }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [confirmingReveal, setConfirmingReveal] = useState(false)
   const [fetchingPosts, setFetchingPosts] = useState(false)
+  const [adding, setAdding] = useState<"one" | "csv" | null>(null)
   const [busy, setBusy] = useState("")
   const [reading, setReading] = useState<Stakeholder | null>(null)
 
@@ -97,7 +99,13 @@ function PeopleList({ wsId }: { wsId: string }) {
   const visible = list.filter(
     (s) =>
       (foundBy === "all" ||
-        (foundBy === "company" ? s.source === "apollo" && !s.icpId : foundBy === "linkedin" ? s.source === "apify_linkedin" : s.icpId === foundBy)) &&
+        (foundBy === "company"
+          ? s.source === "apollo" && !s.icpId
+          : foundBy === "linkedin"
+            ? s.source === "apify_linkedin"
+            : foundBy === "manual"
+              ? s.source === "manual"
+              : s.icpId === foundBy)) &&
       (status === "all" ||
         (status === "lead" ? !!s.leadId : status === "revealed" ? !!s.revealedAt : !s.revealedAt)) &&
       (!q || `${s.firstName} ${s.lastName} ${s.title} ${company(s)} ${s.email ?? ""}`.toLowerCase().includes(q)),
@@ -199,6 +207,7 @@ function PeopleList({ wsId }: { wsId: string }) {
             <SelectItem value="all">Found any way</SelectItem>
             <SelectItem value="company">Apollo company search</SelectItem>
             <SelectItem value="linkedin">LinkedIn (Apify)</SelectItem>
+            <SelectItem value="manual">Added by hand or CSV</SelectItem>
             {(icps.data ?? []).map((i) => (
               <SelectItem key={i.id} value={i.id}>
                 ICP: {i.name}
@@ -217,6 +226,14 @@ function PeopleList({ wsId }: { wsId: string }) {
             <SelectItem value="lead">Leads</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <Button size="sm" variant="outline" onClick={() => setAdding("csv")}>
+            <FileUp /> Import CSV
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => setAdding("one")}>
+            <UserPlus /> Add a person
+          </Button>
+        </div>
       </div>
 
       {picked.length > 0 && (
@@ -260,11 +277,19 @@ function PeopleList({ wsId }: { wsId: string }) {
         <EmptyState
           icon={UserSearch}
           title="Nobody found yet"
-          description="People are found at qualified companies. Find companies for an ICP, research them, then find their stakeholders."
+          description="Find them at qualified companies, or add them yourself: one by hand, or a CSV exported from Apollo."
           action={
-            <Button asChild>
-              <Link href="/companies">Go to Companies</Link>
-            </Button>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button asChild>
+                <Link href="/companies">Go to Companies</Link>
+              </Button>
+              <Button variant="outline" onClick={() => setAdding("csv")}>
+                <FileUp /> Import CSV
+              </Button>
+              <Button variant="outline" onClick={() => setAdding("one")}>
+                <UserPlus /> Add a person
+              </Button>
+            </div>
           }
         />
       ) : visible.length === 0 ? (
@@ -318,6 +343,8 @@ function PeopleList({ wsId }: { wsId: string }) {
                     <TableCell>
                       {s.source === "apify_linkedin" ? (
                         <Pill tone="info">LinkedIn</Pill>
+                      ) : s.source === "manual" ? (
+                        <Pill>Added by you</Pill>
                       ) : s.icpId ? (
                         <Pill>ICP: {icpName.get(s.icpId) ?? "deleted ICP"}</Pill>
                       ) : (
@@ -367,6 +394,12 @@ function PeopleList({ wsId }: { wsId: string }) {
         </div>
       )}
 
+      {adding === "one" && (
+        <AddPersonDialog workspaceId={wsId} icps={icps.data ?? []} onClose={() => setAdding(null)} onAdded={people.reload} />
+      )}
+      {adding === "csv" && (
+        <ImportPeopleDialog workspaceId={wsId} icps={icps.data ?? []} onClose={() => setAdding(null)} onImported={people.reload} />
+      )}
       {fetchingPosts && (
         <FetchPostsDialog
           wsId={wsId}
