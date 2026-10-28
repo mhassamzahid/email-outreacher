@@ -56,6 +56,8 @@ export interface ICP {
   wordsToAvoid: string
   hookGuidance: string
   enabledSources: Source[]
+  /** null = use the default company verification template */
+  verifyPromptId: string | null
   /** null = use the default hook template */
   hookPromptId: string | null
   /** null = use the default email template */
@@ -78,6 +80,7 @@ export type IcpOutreach = Pick<
   | "wordsToAvoid"
   | "hookGuidance"
   | "enabledSources"
+  | "verifyPromptId"
   | "hookPromptId"
   | "emailPromptId"
 >
@@ -142,7 +145,7 @@ export interface EnrichmentItem {
   mediaType: MediaType
 }
 
-export type PromptKind = "hook" | "email" | "score"
+export type PromptKind = "verify" | "hook" | "email" | "score"
 
 export interface PromptTemplate {
   id: string

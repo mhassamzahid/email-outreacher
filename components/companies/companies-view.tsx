@@ -325,6 +325,7 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
       )}
       {open && (
         <PipelineSheet
+          workspaceId={wsId}
           company={open}
           busy={!!busy}
           onClose={() => setOpen(null)}

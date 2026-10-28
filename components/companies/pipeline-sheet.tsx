@@ -6,7 +6,7 @@ import { StatusPill } from "@/components/companies/pipeline-cells"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
-import { type PipelineCompany, fetchCompanyDetail, useApi } from "@/lib/api"
+import { type PipelineCompany, fetchCompanyContent, fetchCompanyDetail, useApi } from "@/lib/api"
 import { compactCount, shortDate } from "@/lib/format"
 
 const RULE_SOURCE: Record<string, string> = {
@@ -37,14 +37,63 @@ function LeadIntelText({ businessId }: { businessId: string }) {
   return <blockquote className="max-h-60 overflow-y-auto rounded-md bg-muted/50 px-3 py-2 text-[13px] leading-relaxed">{detail.data.siteText}</blockquote>
 }
 
+const ROLE: Record<string, string> = { homepage: "Homepage", contact: "Contact", social: "Social links", about: "About" }
+
+/** Every page research read, with its full text, and the company's own recent Instagram posts. */
+function StoredContent({ workspaceId, companyId }: { workspaceId: string; companyId: string }) {
+  const content = useApi(() => fetchCompanyContent(workspaceId, companyId), [workspaceId, companyId])
+  if (content.loading && !content.data) return <Skeleton className="h-16 w-full" />
+  if (!content.data) return <p className="text-[13px] text-destructive">{content.error}</p>
+  const { pages, posts } = content.data
+  return (
+    <>
+      {pages.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            {pages.length} {pages.length === 1 ? "page" : "pages"} read, full text kept
+          </p>
+          {pages.map((p) => (
+            <details key={p.url} className="rounded-md border px-3 py-1.5 text-[13px]">
+              <summary className="cursor-pointer truncate">
+                <span className="font-medium">{ROLE[p.role] ?? p.role}</span>{" "}
+                <span className="text-muted-foreground">
+                  {p.url.replace(/^https?:\/\//, "")} · {p.text.length.toLocaleString()} characters
+                </span>
+              </summary>
+              <p className="mt-2 max-h-72 overflow-y-auto leading-relaxed whitespace-pre-wrap">{p.text || "No text on this page."}</p>
+            </details>
+          ))}
+        </div>
+      )}
+      {posts.length > 0 && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-xs text-muted-foreground">Their latest Instagram posts</p>
+          <ul className="space-y-1.5">
+            {posts.slice(0, 6).map((p) => (
+              <li key={p.id} className="text-[13px]">
+                <a href={p.url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:underline">
+                  {p.postedAt ? shortDate(p.postedAt) : "Undated"} · {p.mediaType}
+                </a>
+                <p className="line-clamp-2">{p.text || "No caption"}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  )
+}
+
 /** Everything known about a pipeline company: why it is where it is, and what was read. */
 export function PipelineSheet({
+  workspaceId,
   company,
   busy,
   onClose,
   onStatus,
   onFindStakeholders,
 }: {
+  workspaceId: string
   company: PipelineCompany
   busy: boolean
   onClose: () => void
@@ -152,6 +201,7 @@ export function PipelineSheet({
           ) : (
             <p className="text-[13px] text-muted-foreground">Couldn&apos;t read it: {site.detail ?? site.outcome.replaceAll("_", " ")}</p>
           )}
+          {company.source === "apollo" && company.researchedAt && <StoredContent workspaceId={workspaceId} companyId={company.id} />}
         </Section>
 
         <Section title="Instagram and socials" icon={AtSign}>

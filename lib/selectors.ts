@@ -3,10 +3,10 @@ import { LEAD_STATUSES } from "./types"
 
 export function resolveTemplate(
   templates: PromptTemplate[],
-  icp: Pick<ICP, "hookPromptId" | "emailPromptId">,
+  icp: Pick<ICP, "verifyPromptId" | "hookPromptId" | "emailPromptId">,
   kind: PromptKind,
 ): PromptTemplate | undefined {
-  const id = kind === "hook" ? icp.hookPromptId : icp.emailPromptId
+  const id = kind === "verify" ? icp.verifyPromptId : kind === "hook" ? icp.hookPromptId : kind === "email" ? icp.emailPromptId : null
   return templates.find((t) => t.id === id) ?? templates.find((t) => t.kind === kind && t.isDefault)
 }
 
@@ -33,7 +33,8 @@ export function generationByLead(generations: Generation[]): Map<string, Generat
 /** ICPs that use a template, explicitly or through the default. */
 export function icpsUsingTemplate(icps: ICP[], template: PromptTemplate): ICP[] {
   return icps.filter((icp) => {
-    const id = template.kind === "hook" ? icp.hookPromptId : icp.emailPromptId
+    if (template.kind === "score") return false
+    const id = icp[ICP_PROMPT_FIELD[template.kind]]
     return id === template.id || (id === null && template.isDefault)
   })
 }
@@ -74,3 +75,12 @@ export function pipeline(leads: Lead[]): Record<PipelineStage, number> {
 export function resolveScoringTemplate(templates: PromptTemplate[], scoring: { promptId: string | null }) {
   return templates.find((t) => t.id === scoring.promptId && t.kind === "score") ?? templates.find((t) => t.kind === "score" && t.isDefault)
 }
+
+/** The ICP field holding its choice for each prompt kind an ICP picks. Email scoring is chosen in Settings. */
+export const ICP_PROMPT_FIELD = {
+  verify: "verifyPromptId",
+  hook: "hookPromptId",
+  email: "emailPromptId",
+} as const satisfies Partial<Record<PromptKind, keyof ICP>>
+
+export type IcpPromptKind = keyof typeof ICP_PROMPT_FIELD

@@ -15,7 +15,7 @@ import { SOURCES } from "@/lib/types"
 // The editable half of an ICP: this workspace's outreach settings. The ICP itself (name, industry,
 // matching rule) belongs to Lead Intel and is shown read-only by LeadIntelRule.
 
-export type IcpDraft = Omit<IcpOutreach, "hookPromptId" | "emailPromptId">
+export type IcpDraft = Omit<IcpOutreach, "verifyPromptId" | "hookPromptId" | "emailPromptId">
 export type SetDraft = <K extends keyof IcpDraft>(key: K, value: IcpDraft[K]) => void
 
 export const toDraft = (icp: ICP): IcpDraft => ({

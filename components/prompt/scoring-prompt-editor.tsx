@@ -17,9 +17,10 @@ import type { PromptTemplate, PromptVersion } from "@/lib/types"
 
 /** The scoring prompt, editable from Settings. Testing and history live in the full prompt editor. */
 export function ScoringPromptEditor() {
-  const { templates, versions, settings } = useStore()
+  const { templates, versions, settings, promptsStatus } = useStore()
   const template = resolveScoringTemplate(templates, settings.scoring)
   const version = currentVersion(versions, template)
+  if (promptsStatus === "loading") return <p className="text-sm text-muted-foreground">Loading the scoring prompt…</p>
   if (!template || !version) return <p className="text-sm text-muted-foreground">No scoring prompt exists yet.</p>
   return <Editor key={version.id} template={template} version={version} />
 }
@@ -58,10 +59,14 @@ function Editor({ template, version }: { template: PromptTemplate; version: Prom
     })
   }
 
-  const save = () => {
-    const v = saveVersion(template.id, draft, note.trim())
-    setNote("")
-    toast.success(`Saved ${template.name} v${v.version}`, { description: "New drafts are scored with it from now on." })
+  const save = async () => {
+    try {
+      const v = await saveVersion(template.id, draft, note.trim())
+      setNote("")
+      toast.success(`Saved ${template.name} v${v.version}`, { description: "New drafts are scored with it from now on." })
+    } catch (e) {
+      toast.error("Couldn't save it", { description: e instanceof Error ? e.message : undefined })
+    }
   }
 
   return (

@@ -21,18 +21,37 @@ import {
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { KIND_LABEL } from "@/lib/prompt-starters"
 import { useStore, type VersionDraft } from "@/lib/store"
 import type { PromptTemplate, PromptVersion } from "@/lib/types"
 
 export default function PromptEditorPage() {
   const { id } = useParams<{ id: string }>()
-  const { templates, versions } = useStore()
+  const { templates, versions, promptsStatus, promptsError, reloadPrompts } = useStore()
   const template = templates.find((t) => t.id === id)
   const version = versions.find((v) => v.id === template?.currentVersionId)
   // Lives outside Editor so the open tab survives the remount after saving or restoring a version.
   const [tab, setTab] = useState("test")
 
+  // Prompts load from the backend; only call it missing once they have.
+  if (promptsStatus === "loading")
+    return (
+      <div className="space-y-4 px-4 pt-7 md:px-8">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-96 w-full" />
+      </div>
+    )
+  if (promptsStatus === "error")
+    return (
+      <p className="px-4 pt-7 text-sm text-destructive md:px-8">
+        Couldn&apos;t load prompts: {promptsError}{" "}
+        <button type="button" className="underline" onClick={reloadPrompts}>
+          Try again
+        </button>
+      </p>
+    )
   if (!template || !version) notFound()
   return <Editor key={template.currentVersionId} template={template} version={version} tab={tab} onTabChange={setTab} />
 }
@@ -71,10 +90,14 @@ function Editor({
     return () => window.removeEventListener("beforeunload", warn)
   }, [dirty])
 
-  const save = () => {
-    const v = saveVersion(template.id, draft, note.trim())
-    setSaveOpen(false)
-    toast.success(`Saved ${template.name} v${v.version}`)
+  const save = async () => {
+    try {
+      const v = await saveVersion(template.id, draft, note.trim())
+      setSaveOpen(false)
+      toast.success(`Saved ${template.name} v${v.version}`)
+    } catch (e) {
+      toast.error("Couldn't save it", { description: e instanceof Error ? e.message : undefined })
+    }
   }
 
   return (
@@ -88,7 +111,7 @@ function Editor({
             {template.name}
           </span>
         }
-        description={`${{ hook: "Hook selection", email: "Email writing", score: "Lead scoring" }[template.kind]} prompt · editing from v${version.version}`}
+        description={`${KIND_LABEL[template.kind]} prompt · editing from v${version.version}`}
         actions={
           <>
             {dirty && (
@@ -104,10 +127,12 @@ function Editor({
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setDefaultTemplate(template.id)
-                  toast.success(`${template.name} is now the default ${template.kind} prompt`)
-                }}
+                onClick={() =>
+                  setDefaultTemplate(template.id).then(
+                    () => toast.success(`${template.name} is now the default ${KIND_LABEL[template.kind].toLowerCase()} prompt`),
+                    (e: unknown) => toast.error("Couldn't change the default", { description: e instanceof Error ? e.message : undefined }),
+                  )
+                }
               >
                 <Star /> Set as default
               </Button>
@@ -115,11 +140,15 @@ function Editor({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                const copy = duplicateTemplate(template.id)
-                toast.success(`Created ${copy.name}`)
-                router.push(`/prompts/${copy.id}`)
-              }}
+              onClick={() =>
+                duplicateTemplate(template.id).then(
+                  (copy) => {
+                    toast.success(`Created ${copy.name}`)
+                    router.push(`/prompts/${copy.id}`)
+                  },
+                  (e: unknown) => toast.error("Couldn't duplicate it", { description: e instanceof Error ? e.message : undefined }),
+                )
+              }
             >
               <Copy /> Duplicate
             </Button>

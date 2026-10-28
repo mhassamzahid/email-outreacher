@@ -6,6 +6,25 @@ import type { PromptKind, PromptVersion } from "./types"
 type Starter = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "temperature" | "maxTokens">
 
 export const PROMPT_STARTERS: Record<PromptKind, Starter> = {
+  verify: {
+    systemPrompt: "You decide whether a company is a good prospect for an outreach campaign. Judge only from the evidence given; when it's thin, score lower.",
+    userPrompt: `The ICP: {{icp.name}} ({{icp.industry}})
+Who they are: {{icp.description}}
+Matching rules:
+{{icp.rules}}
+
+The company: {{company.name}} ({{company.domain}}), {{company.location}}
+Apollo's data:
+{{company.apollo}}
+Instagram:
+{{company.instagram}}
+Website text:
+{{company.website}}
+
+Score this company's fit with the ICP from 0 to 100, with a one-sentence summary, reasons and concerns.`,
+    temperature: 0,
+    maxTokens: 4096,
+  },
   hook: {
     systemPrompt: "You pick the single best personalization hook for a cold email. A weak or risky hook is worse than no hook.",
     userPrompt: `We sell to: {{icp.name}}
@@ -71,7 +90,8 @@ Return JSON only:
 }
 
 export const KIND_LABEL: Record<PromptKind, string> = {
+  verify: "Company verification",
   hook: "Hook selection",
-  email: "Email writing",
-  score: "Lead scoring",
+  email: "Email generation",
+  score: "Email scoring",
 }

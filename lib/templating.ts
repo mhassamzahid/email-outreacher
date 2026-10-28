@@ -31,15 +31,34 @@ const HOOK_VARS = ["hook.text", "hook.source", "hook.url", "hook.date", "hook.su
 
 const EMAIL_VARS = ["email.subject", "email.body"]
 
+/** Company Verification prompts are filled by the backend from a researched company. */
+const VERIFY_VARS = [
+  "icp.name",
+  "icp.industry",
+  "icp.places",
+  "icp.description",
+  "icp.pains",
+  "icp.offer",
+  "icp.rules",
+  "company.name",
+  "company.domain",
+  "company.location",
+  "company.socials",
+  "company.apollo",
+  "company.instagram",
+  "company.website",
+]
+
 /** Variables offered in the editor sidebar for each prompt kind. `lead.extra.*` is matched by prefix. */
 export function availableVariables(kind: PromptKind): string[] {
+  if (kind === "verify") return VERIFY_VARS
   if (kind === "hook") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items"]
   if (kind === "email") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", ...HOOK_VARS]
   return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...EMAIL_VARS]
 }
 
 export function isKnownVariable(name: string, kind: PromptKind): boolean {
-  if (name.startsWith("lead.extra.") && name.length > "lead.extra.".length) return true
+  if (kind !== "verify" && name.startsWith("lead.extra.") && name.length > "lead.extra.".length) return true
   return availableVariables(kind).includes(name)
 }
 

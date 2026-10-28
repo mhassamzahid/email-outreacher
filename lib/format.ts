@@ -77,7 +77,7 @@ export const FLAG_LABEL: Record<GenerationFlag, string> = {
 }
 
 // OpenAI API model IDs: flagship, balanced (default), cost-sensitive high volume.
-export const MODELS = ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"]
+export const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"]
 
 /** First sentence after the greeting, used as a preview in tables. */
 export function firstLine(body: string): string {

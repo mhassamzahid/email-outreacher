@@ -24,8 +24,8 @@ import type {
   Workspace,
 } from "./types"
 
-// Client-side app state shared across pages. Seeded from mock data and reset on refresh.
-// When a backend exists, replace the initial state with fetched data and route the actions through it.
+// Client-side app state shared across pages. Workspaces, ICPs and prompts come from the backend;
+// leads, enrichment and generations are still seeded from mock data and reset on refresh.
 
 export interface SourceProgress {
   done: number
@@ -72,8 +72,8 @@ interface Store {
   icpsError: string | null
   reloadIcps: () => void
   /**
-   * Change an ICP's outreach settings. Saved to the backend (Lead Intel's own fields are never sent);
-   * prompt choices stay in this browser until prompts live in the backend. Rejects if the save fails.
+   * Change an ICP's outreach settings, prompt choices included. Saved to the backend (Lead Intel's own
+   * fields are never sent). Rejects if the save fails.
    */
   updateIcp: (id: string, patch: Partial<IcpOutreach>) => Promise<void>
   /**
@@ -98,14 +98,19 @@ interface Store {
   sendGenerations: (ids: string[]) => void
   /** Re-runs the scoring prompt for one lead's current draft. */
   rescoreLead: (leadId: string) => Promise<void>
-  saveVersion: (templateId: string, draft: VersionDraft, note: string) => PromptVersion
-  restoreVersion: (versionId: string) => PromptVersion | undefined
-  duplicateTemplate: (templateId: string) => PromptTemplate
+  /** The workspace's prompts, from the backend. Empty until loaded; see promptsStatus. */
+  promptsStatus: "loading" | "ready" | "error"
+  promptsError: string | null
+  reloadPrompts: () => void
+  /** Saved in the backend as the template's next version. Rejects with the backend's reason. */
+  saveVersion: (templateId: string, draft: VersionDraft, note: string) => Promise<PromptVersion>
+  restoreVersion: (versionId: string) => Promise<PromptVersion | undefined>
+  duplicateTemplate: (templateId: string) => Promise<PromptTemplate>
   /** New template whose v1 is the given prompt. */
-  createTemplate: (input: { name: string; kind: PromptKind; draft: VersionDraft; note: string }) => PromptTemplate
-  /** Removes a template and its versions. Callers check it is not the default or in use. */
-  deleteTemplate: (templateId: string) => void
-  setDefaultTemplate: (templateId: string) => void
+  createTemplate: (input: { name: string; kind: PromptKind; draft: VersionDraft; note: string; isDefault?: boolean }) => Promise<PromptTemplate>
+  /** Removes a template and its versions. The backend refuses the default or one an ICP uses. */
+  deleteTemplate: (templateId: string) => Promise<void>
+  setDefaultTemplate: (templateId: string) => Promise<void>
 
   users: User[]
   /** From the backend. Empty until loaded; see workspacesStatus. */
@@ -156,8 +161,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [leads, setLeads] = useState(mock.leads)
   const [items, setItems] = useState(mock.enrichmentItems)
   const [generations, setGenerations] = useState(mock.generations)
-  const [templates, setTemplates] = useState(mock.promptTemplates)
-  const [versions, setVersions] = useState(mock.promptVersions)
+  const [templates, setTemplates] = useState<PromptTemplate[]>([])
+  const [versions, setVersions] = useState<PromptVersion[]>([])
+  const [promptsStatus, setPromptsStatus] = useState<Store["promptsStatus"]>("loading")
+  const [promptsError, setPromptsError] = useState<string | null>(null)
+  const [promptsTick, setPromptsTick] = useState(0)
   const [settings, setSettings] = useState(mock.settings)
   const [enrichJobs, setEnrichJobs] = useState<Record<string, EnrichmentJob>>({})
   const [genJobs, setGenJobs] = useState<Record<string, GenerationJob>>({})
@@ -214,7 +222,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setSettings((s) => ({ ...s, spentThisMonthUsd: Math.round((s.spentThisMonthUsd + usd) * 10000) / 10000 }))
 
   // ICPs come from Lead Intel (shared with it) plus this workspace's outreach settings, so they
-  // reload whenever the workspace changes. Prompt choices made in this browser survive the reload.
+  // reload whenever the workspace changes.
   useEffect(() => {
     if (!currentWorkspaceId) return
     let live = true
@@ -222,13 +230,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .fetchIcps(currentWorkspaceId)
       .then((list) => {
         if (!live) return
-        setIcps((previous) =>
-          list.map((raw) => {
-            const icp = api.toIcp(raw)
-            const before = previous.find((p) => p.id === icp.id)
-            return before ? { ...icp, hookPromptId: before.hookPromptId, emailPromptId: before.emailPromptId } : icp
-          }),
-        )
+        setIcps(list.map(api.toIcp))
         setIcpsStatus("ready")
         setIcpsError(null)
       })
@@ -241,6 +243,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       live = false
     }
   }, [currentWorkspaceId, icpsTick])
+
+  // Prompts belong to the workspace. The backend creates its built-in defaults on the first read.
+  useEffect(() => {
+    if (!currentWorkspaceId) return
+    let live = true
+    api
+      .fetchPrompts(currentWorkspaceId)
+      .then(({ prompts, versions }) => {
+        if (!live) return
+        setTemplates(prompts)
+        setVersions(versions)
+        setPromptsStatus("ready")
+        setPromptsError(null)
+      })
+      .catch((e: unknown) => {
+        if (!live) return
+        setPromptsStatus("error")
+        setPromptsError(e instanceof Error ? e.message : "Couldn't load prompts.")
+      })
+    return () => {
+      live = false
+    }
+  }, [currentWorkspaceId, promptsTick])
+
+  const reloadPrompts = useCallback(() => {
+    setPromptsStatus("loading")
+    setPromptsTick((t) => t + 1)
+  }, [])
 
   const reloadIcps = useCallback(() => {
     setIcpsStatus("loading")
@@ -266,11 +296,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const current = icps.find((i) => i.id === id)
     if (!current) return
     const next: ICP = { ...current, ...patch }
-    const promptOnly = Object.keys(patch).every((k) => k === "hookPromptId" || k === "emailPromptId")
-    if (!promptOnly) {
-      const saved = await api.saveIcpOutreach(currentWorkspaceId, id, next)
-      next.updatedAt = saved.updatedAt
-    }
+    const saved = await api.saveIcpOutreach(currentWorkspaceId, id, next)
+    next.updatedAt = saved.updatedAt
     setIcps((list) => list.map((icp) => (icp.id === id ? next : icp)))
   }
 
@@ -425,22 +452,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     addSpend(COST_PER_SCORE)
   }
 
-  const saveVersion: Store["saveVersion"] = (templateId, draft, note) => {
-    const latest = Math.max(0, ...versions.filter((v) => v.templateId === templateId).map((v) => v.version))
-    const version: PromptVersion = {
-      id: uid("pv"),
-      templateId,
-      version: latest + 1,
-      ...draft,
-      note,
-      createdAt: new Date().toISOString(),
-    }
+  const saveVersion: Store["saveVersion"] = async (templateId, draft, note) => {
+    const version = await api.savePromptVersion(currentWorkspaceId, templateId, draft, note)
     setVersions((list) => [...list, version])
     setTemplates((list) => list.map((t) => (t.id === templateId ? { ...t, currentVersionId: version.id } : t)))
     return version
   }
 
-  const restoreVersion: Store["restoreVersion"] = (versionId) => {
+  const restoreVersion: Store["restoreVersion"] = async (versionId) => {
     const source = versions.find((v) => v.id === versionId)
     if (!source) return undefined
     const { systemPrompt, userPrompt, model, temperature, maxTokens } = source
@@ -451,48 +470,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     )
   }
 
-  const duplicateTemplate: Store["duplicateTemplate"] = (templateId) => {
+  const createTemplate: Store["createTemplate"] = async ({ name, kind, draft, note, isDefault }) => {
+    const { prompt, version } = await api.createPrompt(currentWorkspaceId, { name: name.trim(), kind, version: draft, note, isDefault })
+    setTemplates((list) => [...list.map((t) => (isDefault && t.kind === kind ? { ...t, isDefault: false } : t)), prompt])
+    setVersions((list) => [...list, version])
+    return prompt
+  }
+
+  const duplicateTemplate: Store["duplicateTemplate"] = async (templateId) => {
     const tpl = templates.find((t) => t.id === templateId)!
     const current = versions.find((v) => v.id === tpl.currentVersionId)!
-    const copy: PromptTemplate = { id: uid("tpl"), name: `${tpl.name} (copy)`, kind: tpl.kind, isDefault: false, currentVersionId: "" }
-    const version: PromptVersion = {
-      ...current,
-      id: uid("pv"),
-      templateId: copy.id,
-      version: 1,
+    const { systemPrompt, userPrompt, model, temperature, maxTokens } = current
+    return createTemplate({
+      name: `${tpl.name} (copy)`,
+      kind: tpl.kind,
+      draft: { systemPrompt, userPrompt, model, temperature, maxTokens },
       note: `Duplicated from ${tpl.name} v${current.version}`,
-      createdAt: new Date().toISOString(),
-    }
-    copy.currentVersionId = version.id
-    setTemplates((list) => [...list, copy])
-    setVersions((list) => [...list, version])
-    return copy
+    })
   }
 
-  const createTemplate: Store["createTemplate"] = ({ name, kind, draft, note }) => {
-    const tpl: PromptTemplate = { id: uid("tpl"), name: name.trim(), kind, isDefault: false, currentVersionId: "" }
-    const version: PromptVersion = {
-      id: uid("pv"),
-      templateId: tpl.id,
-      version: 1,
-      ...draft,
-      note,
-      createdAt: new Date().toISOString(),
-    }
-    tpl.currentVersionId = version.id
-    setTemplates((list) => [...list, tpl])
-    setVersions((list) => [...list, version])
-    return tpl
-  }
-
-  const deleteTemplate: Store["deleteTemplate"] = (templateId) => {
+  const deleteTemplate: Store["deleteTemplate"] = async (templateId) => {
+    await api.deletePrompt(currentWorkspaceId, templateId)
     setTemplates((list) => list.filter((t) => t.id !== templateId))
     setVersions((list) => list.filter((v) => v.templateId !== templateId))
   }
 
-  const setDefaultTemplate: Store["setDefaultTemplate"] = (templateId) => {
+  const setDefaultTemplate: Store["setDefaultTemplate"] = async (templateId) => {
     const tpl = templates.find((t) => t.id === templateId)
     if (!tpl) return
+    await api.updatePrompt(currentWorkspaceId, templateId, { isDefault: true })
     setTemplates((list) => list.map((t) => (t.kind === tpl.kind ? { ...t, isDefault: t.id === templateId } : t)))
   }
 
@@ -574,6 +580,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setGenerationStatus,
         sendGenerations,
         rescoreLead,
+        promptsStatus,
+        promptsError,
+        reloadPrompts,
         saveVersion,
         restoreVersion,
         duplicateTemplate,

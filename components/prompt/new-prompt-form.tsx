@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { KIND_LABEL, PROMPT_STARTERS } from "@/lib/prompt-starters"
-import { resolveScoringTemplate, resolveTemplate } from "@/lib/selectors"
+import { ICP_PROMPT_FIELD, resolveScoringTemplate, resolveTemplate } from "@/lib/selectors"
 import { useStore, type VersionDraft } from "@/lib/store"
 import type { PromptKind, PromptTemplate } from "@/lib/types"
 
@@ -27,7 +27,7 @@ type Source = { kind: PromptKind; from: string }
 
 /** New prompt page: basics, the prompt itself, where it is used, and a test run before creating. */
 export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
-  const { templates, versions, icps, settings, createTemplate, updateIcp, setDefaultTemplate, setSettings } = useStore()
+  const { templates, versions, icps, settings, createTemplate, updateIcp, setSettings } = useStore()
   const router = useRouter()
 
   const loadSource = ({ kind, from }: Source): VersionDraft => {
@@ -82,25 +82,36 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
     }
   }
 
-  const create = () => {
+  const create = async () => {
     setTouched(true)
     if (errors.name || errors.user) {
       window.scrollTo({ top: 0, behavior: "smooth" })
       return
     }
     const sourceVersion = sourceTemplate && versions.find((v) => v.id === sourceTemplate.currentVersionId)
-    const tpl = createTemplate({
-      name,
-      kind,
-      draft,
-      note:
-        note.trim() ||
-        (sourceTemplate && sourceVersion ? `Created from a copy of ${sourceTemplate.name} v${sourceVersion.version}` : "Created from the starter prompt"),
-    })
-    const field = kind === "hook" ? "hookPromptId" : "emailPromptId"
-    if (kind !== "score") for (const id of icpIds) updateIcp(id, { [field]: tpl.id })
+    let tpl: PromptTemplate
+    try {
+      tpl = await createTemplate({
+        name,
+        kind,
+        draft,
+        isDefault: makeDefault,
+        note:
+          note.trim() ||
+          (sourceTemplate && sourceVersion ? `Created from a copy of ${sourceTemplate.name} v${sourceVersion.version}` : "Created from the starter prompt"),
+      })
+    } catch (e) {
+      toast.error("Couldn't create it", { description: e instanceof Error ? e.message : undefined })
+      return
+    }
+    if (kind !== "score") {
+      const field = ICP_PROMPT_FIELD[kind]
+      const failed = (await Promise.allSettled([...icpIds].map((id) => updateIcp(id, { [field]: tpl.id })))).filter(
+        (r) => r.status === "rejected",
+      ).length
+      if (failed) toast.error(`Created, but ${failed} ICP${failed === 1 ? "" : "s"} couldn't be switched to it`)
+    }
     if (kind === "score" && useForScoring) setSettings((s) => ({ ...s, scoring: { ...s.scoring, promptId: tpl.id } }))
-    if (makeDefault) setDefaultTemplate(tpl.id)
     setDone(true)
     const uses = [
       icpIds.size && `used by ${icpIds.size} ICP${icpIds.size === 1 ? "" : "s"}`,

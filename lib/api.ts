@@ -1,7 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import type { Company, ICP, IcpOutreach, Source, Workspace } from "./types"
+import type { Company, ICP, IcpOutreach, PromptKind, PromptTemplate, PromptVersion, Source, Workspace } from "./types"
 
 // The backend. Pages that use it fetch on mount and show their own loading and error states;
 // everything else in the app still runs on sample data from lib/mock-data.ts.
@@ -89,9 +89,7 @@ export function useApi<T>(load: () => Promise<T>, deps: unknown[]) {
 // ---------- Endpoints ----------
 
 /** This workspace's outreach settings for an ICP, as the backend stores them (eo_icp_profiles). */
-export interface ApiIcpProfile extends Omit<IcpOutreach, "hookPromptId" | "emailPromptId"> {
-  hookPromptId: string | null
-  emailPromptId: string | null
+export interface ApiIcpProfile extends IcpOutreach {
   updatedAt: string
 }
 
@@ -118,6 +116,7 @@ const EMPTY_OUTREACH: IcpOutreach = {
   wordsToAvoid: "",
   hookGuidance: "",
   enabledSources: ["linkedin", "website"],
+  verifyPromptId: null,
   hookPromptId: null,
   emailPromptId: null,
 }
@@ -129,10 +128,7 @@ export function toIcp(api: ApiIcp): ICP {
   return { ...leadIntel, ...outreach, updatedAt: profile?.updatedAt ?? api.updatedAt }
 }
 
-/**
- * Save the outreach half of an ICP. Lead Intel's own fields are never sent.
- * Prompt choices stay in the browser for now: prompts don't live in the backend yet.
- */
+/** Save the outreach half of an ICP, prompt choices included. Lead Intel's own fields are never sent. */
 export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: IcpOutreach) => {
   const body = {
     description: outreach.description,
@@ -146,6 +142,9 @@ export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: Ic
     wordsToAvoid: outreach.wordsToAvoid,
     hookGuidance: outreach.hookGuidance,
     enabledSources: outreach.enabledSources,
+    verifyPromptId: outreach.verifyPromptId,
+    hookPromptId: outreach.hookPromptId,
+    emailPromptId: outreach.emailPromptId,
   }
   return api<ApiIcpProfile>(`/icps/${icpId}/profile`, { workspaceId, method: "PUT", body })
 }
@@ -377,3 +376,34 @@ export interface Usage {
 }
 
 export const fetchUsage = (workspaceId: string, days: number) => api<Usage>(`/usage?days=${days}`, { workspaceId })
+
+// ---------- Prompts: Company Verification, Hook Selection, Email Generation, Email scoring ----------
+
+export type PromptDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens">
+
+export const fetchPrompts = (workspaceId: string) =>
+  api<{ prompts: PromptTemplate[]; versions: PromptVersion[] }>("/prompts", { workspaceId })
+
+export const createPrompt = (
+  workspaceId: string,
+  body: { name: string; kind: PromptKind; version: PromptDraft; note: string; isDefault?: boolean },
+) => api<{ prompt: PromptTemplate; version: PromptVersion }>("/prompts", { workspaceId, method: "POST", body })
+
+export const savePromptVersion = (workspaceId: string, promptId: string, draft: PromptDraft, note: string) =>
+  api<PromptVersion>(`/prompts/${promptId}/versions`, { workspaceId, method: "POST", body: { ...draft, note } })
+
+export const updatePrompt = (workspaceId: string, promptId: string, patch: { name?: string; isDefault?: true }) =>
+  api<PromptTemplate>(`/prompts/${promptId}`, { workspaceId, method: "PATCH", body: patch })
+
+export const deletePrompt = (workspaceId: string, promptId: string) =>
+  api<void>(`/prompts/${promptId}`, { workspaceId, method: "DELETE" })
+
+// ---------- What research read for a pipeline company ----------
+
+export interface CompanyContent {
+  pages: { url: string; role: string; via: string; status: number | null; text: string; fetchedAt: string }[]
+  posts: { id: string; source: string; url: string; postedAt: string | null; text: string; mediaType: string }[]
+}
+
+export const fetchCompanyContent = (workspaceId: string, companyId: string) =>
+  api<CompanyContent>(`/pipeline/companies/${companyId}/content`, { workspaceId })

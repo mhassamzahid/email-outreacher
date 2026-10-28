@@ -32,6 +32,13 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
   const [result, setResult] = useState<PromptTestResult | null>(null)
 
   if (!icp) return <p className="text-sm text-muted-foreground">Add an ICP to test prompts against.</p>
+  if (kind === "verify")
+    return (
+      <p className="text-sm text-muted-foreground">
+        Company verification runs on real companies: research one on the Companies page and its score and reasons show
+        there. It can&apos;t be tried on a sample lead here.
+      </p>
+    )
 
   const leadItems = lead ? items.filter((it) => it.leadId === lead.id) : []
   const choice = lead ? chooseHookItem(icp.id, leadItems) : null

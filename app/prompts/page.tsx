@@ -19,25 +19,34 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { useMockLoading } from "@/hooks/use-mock-loading"
 import { shortDate } from "@/lib/format"
-import { icpsUsingTemplate, resolveScoringTemplate } from "@/lib/selectors"
+import { ICP_PROMPT_FIELD, type IcpPromptKind, icpsUsingTemplate, resolveScoringTemplate } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import type { PromptKind, PromptTemplate } from "@/lib/types"
 
 const SECTIONS: { kind: PromptKind; title: string; description: string }[] = [
-  { kind: "hook", title: "Hook selection", description: "Picks the best piece of a lead's content to open with, or none." },
-  { kind: "email", title: "Email writing", description: "Writes the subject and body from the ICP, the lead and the hook." },
+  {
+    kind: "verify",
+    title: "Company verification",
+    description: "Scores how well a researched company fits the ICP, from its website, Instagram and Apollo data.",
+  },
+  {
+    kind: "hook",
+    title: "Hook selection",
+    description: "Reads a person's posts, pulls out the main points and picks the one to focus the email on.",
+  },
+  { kind: "email", title: "Email generation", description: "Writes the subject and body from the ICP, the person and the hook." },
   {
     kind: "score",
-    title: "Lead scoring",
-    description: "Scores every lead and draft from 0 to 100. Decides what waits for review and what can be sent automatically.",
+    title: "Email scoring",
+    description: "Scores every drafted email from 0 to 100. Decides what waits for review and what can be sent automatically.",
   },
 ]
 
 export default function PromptsPage() {
-  const { templates, versions, icps, settings, duplicateTemplate, deleteTemplate } = useStore()
-  const loading = useMockLoading()
+  const { templates, versions, icps, settings, duplicateTemplate, deleteTemplate, promptsStatus, promptsError, reloadPrompts } =
+    useStore()
+  const loading = promptsStatus === "loading"
   const router = useRouter()
   const [deleting, setDeleting] = useState<PromptTemplate | null>(null)
 
@@ -45,8 +54,7 @@ export default function PromptsPage() {
   const lockReason = (t: PromptTemplate) => {
     if (t.isDefault) return "It's the default. Make another prompt the default first."
     if (t.kind === "score" && settings.scoring.promptId === t.id) return "It's the scoring prompt chosen in Settings."
-    const field = t.kind === "hook" ? "hookPromptId" : "emailPromptId"
-    const users = t.kind === "score" ? [] : icps.filter((i) => i[field] === t.id)
+    const users = t.kind === "score" ? [] : icps.filter((i) => i[ICP_PROMPT_FIELD[t.kind as IcpPromptKind]] === t.id)
     if (users.length) return `It's used by ${users.map((i) => i.name).join(", ")}.`
     return ""
   }
@@ -65,6 +73,14 @@ export default function PromptsPage() {
         }
       />
       <div className="space-y-8 px-4 pb-10 md:px-8">
+        {promptsStatus === "error" && (
+          <p className="text-sm text-destructive">
+            Couldn&apos;t load prompts: {promptsError}{" "}
+            <button type="button" className="underline" onClick={reloadPrompts}>
+              Try again
+            </button>
+          </p>
+        )}
         {SECTIONS.map(({ kind, title, description }) => {
           const list = templates.filter((t) => t.kind === kind)
           return (
@@ -172,10 +188,12 @@ export default function PromptsPage() {
                                     <PencilLine /> Open in editor
                                   </DropdownMenuItem>
                                   <DropdownMenuItem
-                                    onSelect={() => {
-                                      const copy = duplicateTemplate(t.id)
-                                      toast.success(`Created ${copy.name}`)
-                                    }}
+                                    onSelect={() =>
+                                      duplicateTemplate(t.id).then(
+                                        (copy) => toast.success(`Created ${copy.name}`),
+                                        (e: unknown) => toast.error("Couldn't duplicate it", { description: e instanceof Error ? e.message : undefined }),
+                                      )
+                                    }
                                   >
                                     <Copy /> Duplicate
                                   </DropdownMenuItem>
@@ -210,11 +228,16 @@ export default function PromptsPage() {
         title={deleting ? `Delete ${deleting.name}?` : ""}
         description="The prompt and all of its versions are removed. Drafts it already wrote are kept. This can't be undone."
         confirmLabel="Delete prompt"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!deleting) return
-          deleteTemplate(deleting.id)
-          toast.success(`Deleted ${deleting.name}`)
-          setDeleting(null)
+          try {
+            await deleteTemplate(deleting.id)
+            toast.success(`Deleted ${deleting.name}`)
+          } catch (e) {
+            toast.error("Couldn't delete it", { description: e instanceof Error ? e.message : undefined })
+          } finally {
+            setDeleting(null)
+          }
         }}
       />
     </>

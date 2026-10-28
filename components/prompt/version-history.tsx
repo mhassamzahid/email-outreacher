@@ -145,12 +145,17 @@ export function VersionHistory({ template, onRestored }: { template: PromptTempl
         title={restoring ? `Restore v${restoring.version}?` : ""}
         description="This saves a copy of that version as the new current version. Unsaved edits in the editor are discarded. History is kept."
         confirmLabel="Restore as new version"
-        onConfirm={() => {
+        onConfirm={async () => {
           if (!restoring) return
-          const v = restoreVersion(restoring.id)
-          if (v) toast.success(`Restored v${restoring.version} as v${v.version}`)
-          setRestoring(null)
-          onRestored()
+          try {
+            const v = await restoreVersion(restoring.id)
+            if (v) toast.success(`Restored v${restoring.version} as v${v.version}`)
+            onRestored()
+          } catch (e) {
+            toast.error("Couldn't restore it", { description: e instanceof Error ? e.message : undefined })
+          } finally {
+            setRestoring(null)
+          }
         }}
       />
     </div>
