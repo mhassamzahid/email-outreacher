@@ -98,7 +98,7 @@ function Drafts({ wsId, icpId }: { wsId: string; icpId?: string }) {
                 <TableHead>Person</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Hook</TableHead>
-                <TableHead className="text-right">Confidence</TableHead>
+                <TableHead className="text-right">Score</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Written</TableHead>
               </TableRow>
@@ -119,7 +119,9 @@ function Drafts({ wsId, icpId }: { wsId: string; icpId?: string }) {
                   <TableCell>
                     {d.hook ? <Pill tone="info">From a post · {d.relevance}/5</Pill> : <Pill>No hook</Pill>}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{d.confidence}</TableCell>
+                  <TableCell className="text-right tabular-nums" title={`Claude's own confidence: ${d.confidence}`}>
+                    {d.score ?? "—"}
+                  </TableCell>
                   <TableCell>
                     <Pill tone={STATUS[d.status].tone}>{STATUS[d.status].label}</Pill>
                   </TableCell>
@@ -208,6 +210,7 @@ function DraftSheet({
           </SheetDescription>
           <div className="flex flex-wrap items-center gap-2 pt-1">
             <Pill tone={STATUS[draft.status].tone}>{STATUS[draft.status].label}</Pill>
+            {draft.score !== null && <Pill tone={draft.score >= 70 ? "positive" : draft.score >= 40 ? "warning" : "negative"}>Score {draft.score}</Pill>}
             <span className="text-xs text-muted-foreground tabular-nums">
               Confidence {draft.confidence} · cost {formatUsd(draft.costUsd)}
               {draft.flags.length ? ` · ${draft.flags.map((f) => f.replaceAll("_", " ")).join(", ")}` : ""}
@@ -252,6 +255,18 @@ function DraftSheet({
           <p className="text-xs text-muted-foreground">Approving marks it ready. Nothing is sent from here.</p>
         </section>
 
+        {draft.scoreReasons.length > 0 && (
+          <section className="space-y-2 border-t border-rule px-5 py-4">
+            <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Why it scored {draft.score}</h3>
+            <ul className="list-disc space-y-0.5 pl-5 text-[13px]">
+              {draft.scoreReasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">Scored against the emails rated good and bad and the sample email.</p>
+          </section>
+        )}
+
         <section className="space-y-2 border-t border-rule px-5 py-4">
           <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Why this email</h3>
           {draft.hook ? (
@@ -276,12 +291,14 @@ function DraftSheet({
           )}
           {draft.points.length > 0 && (
             <div className="space-y-1 pt-1">
-              <p className="text-xs text-muted-foreground">Main points from their posts, strongest first</p>
-              <ol className="list-decimal space-y-1 pl-5 text-[13px]">
+              <p className="text-xs text-muted-foreground">Hooks found, best first</p>
+              <ol className="list-decimal space-y-1.5 pl-5 text-[13px]">
                 {draft.points.map((p) => (
                   <li key={p.rank}>
-                    {p.point} <span className="text-muted-foreground tabular-nums">({p.relevance}/5)</span>
-                    {p.why && <span className="block text-xs text-muted-foreground">{p.why}</span>}
+                    {p.hook || p.point} <span className="text-muted-foreground tabular-nums">({p.relevance}/5)</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {[p.source, p.hook ? p.point : "", p.why].filter(Boolean).join(" · ")}
+                    </span>
                   </li>
                 ))}
               </ol>

@@ -18,7 +18,9 @@ const GROUPS: { label: string; match: (v: string) => boolean }[] = [
   { label: "Lead", match: (v) => v.startsWith("lead.") },
   { label: "Company", match: (v) => v.startsWith("company.") },
   { label: "Product", match: (v) => v.startsWith("product.") },
-  { label: "Content", match: (v) => v === "items" || v.startsWith("hook.") },
+  { label: "Posts", match: (v) => v === "items" || v.startsWith("posts.") },
+  { label: "Hooks", match: (v) => v === "hooks" || v.startsWith("hook.") },
+  { label: "Feedback examples", match: (v) => v.startsWith("examples.") },
   { label: "Draft", match: (v) => v.startsWith("email.") },
 ]
 

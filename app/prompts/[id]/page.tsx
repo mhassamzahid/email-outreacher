@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { ChevronLeft, Copy, Save, Star } from "lucide-react"
 import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
+import { OutputSchemaView } from "@/components/prompt/output-schema"
 import { PromptBody } from "@/components/prompt/prompt-body"
 import { TestPanel } from "@/components/prompt/test-panel"
 import { VersionHistory } from "@/components/prompt/version-history"
@@ -167,12 +168,16 @@ function Editor({
           <TabsList>
             <TabsTrigger value="test">Test</TabsTrigger>
             <TabsTrigger value="history">Version history</TabsTrigger>
+            <TabsTrigger value="output">Output schema</TabsTrigger>
           </TabsList>
           <TabsContent value="test" className="pt-2">
             <TestPanel template={template} draft={draft} />
           </TabsContent>
           <TabsContent value="history" className="pt-2">
             <VersionHistory template={template} onRestored={() => undefined} />
+          </TabsContent>
+          <TabsContent value="output" className="pt-2">
+            <OutputSchemaView kind={template.kind} />
           </TabsContent>
         </Tabs>
       </div>

@@ -7,6 +7,7 @@ import { Check, ChevronRight } from "lucide-react"
 import { toast } from "sonner"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { PageHeader } from "@/components/page-header"
+import { OutputSchemaView } from "@/components/prompt/output-schema"
 import { PromptBody } from "@/components/prompt/prompt-body"
 import { TestPanel } from "@/components/prompt/test-panel"
 import { Button } from "@/components/ui/button"
@@ -301,6 +302,14 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
             <p className="text-sm text-muted-foreground">Runs the prompt above against a real ICP and lead. Nothing is saved.</p>
           </div>
           <TestPanel key={kind} template={testTemplate} draft={draft} />
+        </section>
+
+        <section className="space-y-3" aria-label="Output schema">
+          <div>
+            <h2 className="text-[15px] font-semibold">Output schema</h2>
+            <p className="text-sm text-muted-foreground">The JSON shape this kind of prompt always answers in.</p>
+          </div>
+          <OutputSchemaView kind={kind} />
         </section>
 
         <div className="flex justify-end gap-2 border-t pt-5">

@@ -82,6 +82,8 @@ interface Store {
    * wasn't created. If it was but the outreach settings didn't save, resolves with a `warning`.
    */
   createIcp: (input: api.IcpCreate, outreach?: Partial<IcpOutreach>) => Promise<{ icp: ICP; warning?: string }>
+  /** Change an ICP's Lead Intel fields (name, industry, rule…) in Lead Intel. Rejects with the backend's reason. */
+  updateIcpDefinition: (id: string, input: api.IcpCreate) => Promise<ICP>
   addLeads: (leads: Lead[]) => void
   moveLeads: (ids: string[], icpId: string) => void
   deleteLeads: (ids: string[]) => void
@@ -290,6 +292,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     setIcps((list) => [...list, icp].sort((a, b) => a.priority - b.priority))
     return { icp, warning }
+  }
+
+  const updateIcpDefinition: Store["updateIcpDefinition"] = async (id, input) => {
+    const icp = api.toIcp(await api.updateIcpDefinition(currentWorkspaceId, id, input))
+    setIcps((list) => list.map((i) => (i.id === id ? icp : i)).sort((a, b) => a.priority - b.priority))
+    return icp
   }
 
   const updateIcp: Store["updateIcp"] = async (id, patch) => {
@@ -569,6 +577,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         icpsError,
         reloadIcps,
         updateIcp,
+        updateIcpDefinition,
         createIcp,
         addLeads,
         moveLeads,

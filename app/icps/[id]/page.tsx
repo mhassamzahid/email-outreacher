@@ -1,7 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { Pencil } from "lucide-react"
 import { toast } from "sonner"
+import { EditIcpDefinition } from "@/components/edit-icp-definition"
 import { BasicsFields, LeadIntelRule, MessagingFields, ProductField, SourcesFields, TargetingFields, toDraft, type IcpDraft } from "@/components/icp-form"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -20,6 +22,7 @@ function DefinitionForm({ icp }: { icp: ICP }) {
   const { updateIcp, settings } = useStore()
   const [draft, setDraft] = useState<IcpDraft>(() => toDraft(icp))
   const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
   const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(icp))
 
   useEffect(() => {
@@ -67,11 +70,18 @@ function DefinitionForm({ icp }: { icp: ICP }) {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Lead Intel definition</CardTitle>
-              <CardDescription>
-                This ICP is shared with Lead Intel and edited there. These are its fields, exactly as Lead Intel stores
-                them.
-              </CardDescription>
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1.5">
+                  <CardTitle>Lead Intel definition</CardTitle>
+                  <CardDescription>
+                    Shared with Lead Intel. These are its fields, exactly as Lead Intel stores them. Editing them changes the
+                    ICP for Lead Intel too.
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <Pencil /> Edit
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <LeadIntelRule icp={icp} />
@@ -111,6 +121,7 @@ function DefinitionForm({ icp }: { icp: ICP }) {
           </CardContent>
         </Card>
       </div>
+      {editing && <EditIcpDefinition icp={icp} onClose={() => setEditing(false)} />}
     </div>
   )
 }

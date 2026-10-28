@@ -120,8 +120,8 @@ export default function SettingsPage() {
           </Panel>
           <Panel
             id="scoring-prompt"
-            title="Lead scoring prompt"
-            description="Reads the ICP, the lead, their content and the drafted email, and returns a score from 0 to 100 with reasons."
+            title="Email scoring prompt"
+            description="Scores every drafted email from 0 to 100 by how close it is to the emails rated good and the sample email, and how far from the ones rated bad, with reasons."
           >
             <ScoringPromptEditor />
           </Panel>

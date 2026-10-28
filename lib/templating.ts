@@ -19,15 +19,30 @@ const ICP_VARS = [
   "icp.hookGuidance",
 ]
 
+/** The person the email goes to: the lead, plus the record they were found or added as. */
 const LEAD_VARS = [
   "lead.firstName",
   "lead.lastName",
-  "lead.company",
+  "lead.fullName",
   "lead.title",
+  "lead.seniority",
+  "lead.headline",
+  "lead.location",
+  "lead.company",
   "lead.website",
+  "lead.linkedinUrl",
+  "lead.instagramUrl",
+  "lead.experience",
 ]
 
-const HOOK_VARS = ["hook.text", "hook.summary", "hook.post", "hook.source", "hook.url", "hook.date"]
+/** Posts, numbered once: {{items}} is all of them; the others are parts of it with the same numbers. */
+const POST_VARS = ["items", "posts.linkedin", "posts.instagram"]
+
+/** The ranked hooks from Hook Selection, and the top one the email opens with. */
+const HOOK_VARS = ["hooks", "hook.text", "hook.summary", "hook.post", "hook.source", "hook.url", "hook.date"]
+
+/** Emails rated on the Feedback page for the same ICP. */
+const EXAMPLE_VARS = ["examples.good", "examples.bad"]
 
 const EMAIL_VARS = ["email.subject", "email.body"]
 
@@ -42,6 +57,7 @@ const COMPANY_VARS = [
   "company.socials",
   "company.website",
   "company.instagram",
+  "company.posts",
   "company.apollo",
 ]
 
@@ -72,21 +88,11 @@ const VERIFY_VARS = [
 /** Variables offered in the editor sidebar for each prompt kind. `lead.extra.*` is matched by prefix. */
 export function availableVariables(kind: PromptKind): string[] {
   if (kind === "verify") return VERIFY_VARS
-  if (kind === "hook")
-    return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...COMPANY_VARS, "company.summary", ...PRODUCT_VARS]
-  // Email prompts can also see every post ({{items}}), not just the chosen one ({{hook.post}}).
-  if (kind === "email")
-    return [
-      ...ICP_VARS,
-      ...LEAD_VARS,
-      "lead.extra.<column>",
-      "items",
-      ...HOOK_VARS,
-      ...COMPANY_VARS,
-      "company.summary",
-      ...PRODUCT_VARS,
-    ]
-  return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...EMAIL_VARS]
+  const person = [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", ...POST_VARS, ...COMPANY_VARS, "company.summary", ...PRODUCT_VARS]
+  if (kind === "hook") return person
+  if (kind === "email") return [...person, ...HOOK_VARS, ...EXAMPLE_VARS]
+  // Email scoring sees the draft too.
+  return [...person, ...HOOK_VARS, ...EXAMPLE_VARS, ...EMAIL_VARS]
 }
 
 export function isKnownVariable(name: string, kind: PromptKind): boolean {
@@ -103,6 +109,7 @@ export function unknownVariables(template: string, kind: PromptKind): string[] {
 }
 
 export interface HookContext {
+  /** The opening sentence. */
   text: string
   source: string
   url: string

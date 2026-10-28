@@ -245,6 +245,10 @@ export type IcpCreate = Pick<
 
 export const createIcp = (body: IcpCreate) => api<ApiIcp>("/icps", { method: "POST", body })
 
+/** Change an ICP's own fields in Lead Intel's icps table (shared, so Lead Intel sees it too). */
+export const updateIcpDefinition = (workspaceId: string, id: string, body: IcpCreate) =>
+  api<ApiIcp>(`/icps/${id}`, { workspaceId, method: "PUT", body })
+
 // ---------- LinkedIn people and posts (Apify) ----------
 
 export const addAsLeads = (workspaceId: string, stakeholderIds: string[]) =>
@@ -449,7 +453,8 @@ export interface EmailDraft {
   confidence: number
   flags: string[]
   chosenPost: { source: string; url: string; postedAt: string | null; text: string; whose: "person" | "company" } | null
-  points: { rank: number; point: string; why: string; relevance: number }[]
+  /** The ranked hooks from Hook Selection, best first. */
+  points: { rank: number; point: string; hook: string; source: string; why: string; relevance: number }[]
   costUsd: number
   createdAt: string
   updatedAt: string
@@ -457,6 +462,9 @@ export interface EmailDraft {
   feedback: EmailFeedback | null
   /** How many rated emails Claude was shown as examples when it wrote this one. */
   examplesUsed: number
+  /** The Email Scoring prompt's verdict, 0 to 100, or null when it wasn't scored. */
+  score: number | null
+  scoreReasons: string[]
 }
 
 export type FeedbackTag =
@@ -612,3 +620,15 @@ export const updateProduct = (workspaceId: string, id: string, body: ProductFiel
 
 export const deleteProduct = (workspaceId: string, id: string) =>
   api<void>(`/products/${id}`, { workspaceId, method: "DELETE" })
+
+// ---------- Output schemas: the JSON shape each prompt kind answers in (fixed by the app) ----------
+
+export interface OutputSchema {
+  name: string
+  /** When this shape is used. */
+  note: string
+  /** The JSON schema, exactly as sent to Claude as the required output format. */
+  jsonSchema: Record<string, unknown>
+}
+
+export const fetchOutputSchemas = () => api<Record<PromptKind, OutputSchema[]>>("/prompts/output-schemas")
