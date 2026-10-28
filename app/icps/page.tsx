@@ -8,17 +8,17 @@ import { PageHeader } from "@/components/page-header"
 import { ConfidenceBadge, Pill, PipelineStrip } from "@/components/status"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { FLAG_LABEL, fullName } from "@/lib/format"
-import { estimateEnrichmentCost, estimateGenerationCost } from "@/lib/mock-actions"
-import { generationByLead, pipeline } from "@/lib/selectors"
+import { fetchEmails, useApi } from "@/lib/api"
+import { flagLabel } from "@/lib/format"
+import { pipeline } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
-import type { Generation, Lead } from "@/lib/types"
 
 const LOW_CONFIDENCE = 60
 
 export default function IcpsPage() {
-  const { icps, icpsStatus, icpsError, reloadIcps, workspacesStatus, leads, generations, settings } = useStore()
+  const { icps, icpsStatus, icpsError, reloadIcps, workspacesStatus, leads, settings, currentWorkspaceId } = useStore()
   const loading = icpsStatus === "loading" || workspacesStatus === "loading"
+  const emails = useApi(() => fetchEmails(currentWorkspaceId), [currentWorkspaceId])
 
   const rows = icps.map((icp) => {
     const icpLeads = leads.filter((l) => l.icpId === icp.id)
@@ -28,28 +28,22 @@ export default function IcpsPage() {
   const waiting = rows.filter((r) => r.counts.review > 0).length
   const notEnriched = rows.reduce((sum, r) => sum + r.counts.pending, 0)
 
-  const genMap = generationByLead(generations)
-  const attention = leads
-    .map((lead) => ({ lead, gen: genMap.get(lead.id), icpName: icps.find((i) => i.id === lead.icpId)?.name ?? "" }))
+  // Unsent drafts that are flagged, unsure, or scored under the auto-send threshold, weakest first.
+  const threshold = settings.scoring.threshold
+  const attention = (emails.data ?? [])
     .filter(
-      (r): r is { lead: Lead; gen: Generation; icpName: string } =>
-        !!r.gen &&
-        (r.gen.status === "draft" || r.gen.status === "edited") &&
-        (r.gen.flags.length > 0 || r.gen.confidence < LOW_CONFIDENCE),
+      (e) =>
+        (e.status === "draft" || e.status === "edited") &&
+        (e.flags.length > 0 || e.confidence < LOW_CONFIDENCE || (e.score !== null && e.score < threshold)),
     )
-    .sort((a, b) => a.gen.confidence - b.gen.confidence)
+    .map((e) => ({ email: e, icpName: icps.find((i) => i.id === e.lead.icpId)?.name ?? "No ICP" }))
+    .sort((a, b) => (a.email.score ?? a.email.confidence) - (b.email.score ?? b.email.confidence))
 
-  const nextRuns = rows.map(({ icp, leads: icpLeads }) => {
-    const toEnrich = icpLeads.filter((l) => l.status === "imported" || l.status === "failed")
-    const toDraft = icpLeads.filter((l) => l.status === "enriched" || l.status === "no_content")
-    return {
-      icp,
-      enrich: toEnrich.length,
-      enrichCost: estimateEnrichmentCost(toEnrich, icp.enabledSources, settings.postsPerLead).total,
-      draft: toDraft.length,
-      draftCost: estimateGenerationCost(toDraft.length),
-    }
-  })
+  const nextRuns = rows.map(({ icp, leads: icpLeads }) => ({
+    icp,
+    fetch: icpLeads.filter((l) => l.status === "imported" || l.status === "failed").length,
+    draft: icpLeads.filter((l) => l.status === "enriched" || l.status === "no_content").length,
+  }))
 
   const newButton = (
     <Button asChild>
@@ -143,31 +137,50 @@ export default function IcpsPage() {
               <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-5 pt-4 pb-2">
                 <h2 className="text-[15px] font-semibold">Needs a closer look</h2>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {attention.length} draft{attention.length === 1 ? "" : "s"} flagged or under {LOW_CONFIDENCE}
+                  {emails.loading
+                    ? "Loading drafts…"
+                    : `${attention.length} draft${attention.length === 1 ? "" : "s"} flagged, unsure or under ${threshold}`}
                 </span>
               </header>
-              {attention.length === 0 ? (
-                <p className="px-5 pb-4 text-sm text-muted-foreground">Every draft waiting for review is unflagged and confident.</p>
+              {emails.error ? (
+                <p className="px-5 pb-4 text-sm text-muted-foreground">Couldn&apos;t load drafts: {emails.error}</p>
+              ) : emails.loading ? (
+                <div className="space-y-2 px-5 pb-4">
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
+                </div>
+              ) : attention.length === 0 ? (
+                <p className="px-5 pb-4 text-sm text-muted-foreground">
+                  Every draft waiting for review is unflagged, confident and scores {threshold} or more.
+                </p>
               ) : (
                 <ul className="divide-y divide-rule pb-1">
-                  {attention.slice(0, 3).map(({ lead, gen, icpName }) => (
-                    <li key={gen.id}>
+                  {attention.slice(0, 3).map(({ email, icpName }) => (
+                    <li key={email.id}>
                       <Link
-                        href={`/icps/${lead.icpId}/review`}
+                        href={email.lead.icpId ? `/icps/${email.lead.icpId}/review` : "/icps"}
                         className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-muted/60"
                       >
                         <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium">{fullName(lead)}</div>
+                          <div className="truncate text-sm font-medium">
+                            {`${email.lead.firstName} ${email.lead.lastName}`.trim() || email.lead.email}
+                          </div>
                           <div className="truncate text-[13px] text-muted-foreground">
-                            {lead.company} · {icpName}
+                            {email.lead.company} · {icpName}
                           </div>
                         </div>
-                        {gen.flags[0] ? (
-                          <Pill tone={gen.flags[0] === "sensitive_topic" ? "negative" : "warning"}>{FLAG_LABEL[gen.flags[0]]}</Pill>
-                        ) : (
+                        {email.flags[0] ? (
+                          <Pill tone={email.flags[0] === "sensitive_topic" ? "negative" : "warning"}>{flagLabel(email.flags[0])}</Pill>
+                        ) : email.confidence < LOW_CONFIDENCE ? (
                           <Pill tone="warning">Low confidence</Pill>
+                        ) : (
+                          <Pill tone="warning">Low score</Pill>
                         )}
-                        <ConfidenceBadge value={gen.confidence} />
+                        {email.score !== null ? (
+                          <span className="w-8 text-right text-sm tabular-nums">{email.score}</span>
+                        ) : (
+                          <ConfidenceBadge value={email.confidence} />
+                        )}
                       </Link>
                     </li>
                   ))}
@@ -183,39 +196,39 @@ export default function IcpsPage() {
             <section className="flex flex-col rounded-lg border">
               <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-5 pt-4 pb-2">
                 <h2 className="text-[15px] font-semibold">Ready to run</h2>
-                <span className="text-xs text-muted-foreground">Estimated cost at {settings.postsPerLead} posts per source</span>
+                <span className="text-xs text-muted-foreground">Leads waiting at each step</span>
               </header>
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-left text-xs text-muted-foreground">
                     <th className="px-5 pb-2 font-normal">ICP</th>
-                    <th className="px-3 pb-2 text-right font-normal">To enrich</th>
-                    <th className="px-5 pb-2 text-right font-normal">To draft</th>
+                    <th className="px-3 pb-2 text-right font-normal">Posts to fetch</th>
+                    <th className="px-5 pb-2 text-right font-normal">Emails to write</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-rule border-t border-rule">
-                  {nextRuns.map(({ icp, enrich, enrichCost, draft, draftCost }) => (
+                  {nextRuns.map(({ icp, fetch, draft }) => (
                     <tr key={icp.id}>
                       <td className="w-full max-w-0 px-5 py-3.5">
                         <Link href={`/icps/${icp.id}/leads`} className="block truncate font-medium hover:underline">
                           {icp.name}
                         </Link>
                       </td>
-                      <RunCell count={enrich} cost={enrichCost} className="px-3" />
-                      <RunCell count={draft} cost={draftCost} className="px-5" />
+                      <RunCell count={fetch} className="px-3" />
+                      <RunCell count={draft} className="px-5" />
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="border-t">
                   <tr>
                     <td className="px-5 py-2.5 text-muted-foreground">Total</td>
-                    <RunCell count={sum(nextRuns, "enrich")} cost={sum(nextRuns, "enrichCost")} className="px-3" />
-                    <RunCell count={sum(nextRuns, "draft")} cost={sum(nextRuns, "draftCost")} className="px-5" />
+                    <RunCell count={nextRuns.reduce((n, r) => n + r.fetch, 0)} className="px-3" />
+                    <RunCell count={nextRuns.reduce((n, r) => n + r.draft, 0)} className="px-5" />
                   </tr>
                 </tfoot>
               </table>
               <p className="mt-auto border-t border-rule px-5 py-2.5 text-[13px] text-muted-foreground">
-                Runs start from each ICP&apos;s Leads tab and confirm the cost first.
+                Runs start from each ICP&apos;s Leads tab. Fetching posts shows its cost ceiling first.
               </p>
             </section>
           </div>
@@ -225,23 +238,10 @@ export default function IcpsPage() {
   )
 }
 
-/** Estimates are shown in cents; totals are summed from the rounded figures on screen. */
-const cents = (n: number) => Math.round(n * 100) / 100
-
-function sum<T extends Record<K, number>, K extends keyof T>(rows: T[], key: K): number {
-  return rows.reduce((total, r) => total + (key.toString().endsWith("Cost") ? cents(r[key]) : r[key]), 0)
-}
-
-function RunCell({ count, cost, className }: { count: number; cost: number; className?: string }) {
+function RunCell({ count, className }: { count: number; className?: string }) {
   return (
     <td className={`py-3.5 text-right whitespace-nowrap tabular-nums ${className ?? ""}`}>
-      {count ? (
-        <>
-          {count} <span className="text-muted-foreground">· ${cents(cost).toFixed(2)}</span>
-        </>
-      ) : (
-        <span className="text-muted-foreground">–</span>
-      )}
+      {count || <span className="text-muted-foreground">–</span>}
     </td>
   )
 }

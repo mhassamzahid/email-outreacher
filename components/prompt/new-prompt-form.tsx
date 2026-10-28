@@ -9,7 +9,6 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { PageHeader } from "@/components/page-header"
 import { OutputSchemaView } from "@/components/prompt/output-schema"
 import { PromptBody } from "@/components/prompt/prompt-body"
-import { TestPanel } from "@/components/prompt/test-panel"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -123,7 +122,6 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
     router.push(`/prompts/${tpl.id}`)
   }
 
-  const testTemplate: PromptTemplate = { id: "__new__", name: name || "New prompt", kind, isDefault: false, currentVersionId: "" }
   const currentDefault = templates.find((t) => t.kind === kind && t.isDefault)
   const currentScoring = resolveScoringTemplate(templates, settings.scoring)
 
@@ -295,14 +293,6 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
             </CardContent>
           </Card>
         </div>
-
-        <section className="space-y-3" aria-label="Try it">
-          <div>
-            <h2 className="text-[15px] font-semibold">Try it before creating</h2>
-            <p className="text-sm text-muted-foreground">Runs the prompt above against a real ICP and lead. Nothing is saved.</p>
-          </div>
-          <TestPanel key={kind} template={testTemplate} draft={draft} />
-        </section>
 
         <section className="space-y-3" aria-label="Output schema">
           <div>

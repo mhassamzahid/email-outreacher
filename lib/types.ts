@@ -123,8 +123,12 @@ export interface Lead {
   facebookUrl: string
   extra: Record<string, string>
   status: LeadStatus
-  /** AI lead score from the scoring prompt; null until the lead has a draft to score. */
+  /** The Email Scoring prompt's verdict on the lead's current draft; null until it has one. */
   score: LeadScore | null
+  /** As reported by Apollo or the CSV: verified, likely, unverified… null when unknown. */
+  emailStatus: string | null
+  /** How many of their own posts are stored. */
+  postCount: number
   createdAt: string
 }
 
@@ -132,8 +136,6 @@ export interface LeadScore {
   /** 0 to 100 */
   value: number
   reasons: string[]
-  promptVersionId: string
-  scoredAt: string
 }
 
 export interface EnrichmentItem {
@@ -177,39 +179,15 @@ export type GenerationFlag =
   | "sensitive_topic"
   | "repost"
   | "old_content"
-  | "low_relevance"
-  | "word_count"
-
-export interface Generation {
-  id: string
-  leadId: string
-  hookPromptVersionId: string
-  emailPromptVersionId: string
-  chosenItemId: string | null
-  hook: string
-  /** 0 to 5 */
-  relevance: number
-  subject: string
-  body: string
-  /** 0 to 100 */
-  confidence: number
-  flags: GenerationFlag[]
-  status: GenerationStatus
-  editedBody: string | null
-  costUsd: number
-  createdAt: string
-  sentAt: string | null
-  /** "auto" when the lead scored at or above the threshold with auto-send on. */
-  sentBy: "auto" | "manual" | null
-}
+  | "thin_material"
+  | "no_hook"
+  | "not_scored"
 
 export interface Settings {
   defaultModel: string
   postsPerLead: number
   maxPostAgeDays: number
   monthlyBudgetUsd: number
-  /** Spend recorded this calendar month (mock). */
-  spentThisMonthUsd: number
   scoring: ScoringSettings
 }
 

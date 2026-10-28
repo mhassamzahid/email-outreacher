@@ -7,20 +7,21 @@ import { AutoSendSettings } from "@/components/auto-send-settings"
 import { FeedbackSettings } from "@/components/feedback/feedback-settings"
 import { ResearchSettings } from "@/components/settings/research-settings"
 import { PageHeader } from "@/components/page-header"
-import { ScoringPromptEditor } from "@/components/prompt/scoring-prompt-editor"
-import { Pill } from "@/components/status"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { fetchUsage, useApi } from "@/lib/api"
 import { MODELS, formatUsd } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
+// The services the backend calls, and the .env key each one reads.
 const CONNECTIONS = [
-  { name: "OpenAI", purpose: "Hook selection and email writing" },
-  { name: "Apify", purpose: "LinkedIn, Instagram and Facebook posts" },
-  { name: "Jina", purpose: "Company website content" },
+  { name: "Claude (Anthropic)", purpose: "Company verification, hook selection, email writing and scoring", env: "ANTHROPIC_API_KEY" },
+  { name: "Apollo", purpose: "Finding companies and people, revealing emails", env: "APOLLO_API_KEY" },
+  { name: "Apify", purpose: "LinkedIn people and posts, Instagram profiles and posts", env: "APIFY_TOKEN" },
+  { name: "Jina", purpose: "Reading websites our own crawler can't (optional)", env: "JINA_API_KEY" },
 ]
 
 const WARN_AT = 0.8
@@ -49,7 +50,10 @@ function Panel({
 }
 
 export default function SettingsPage() {
-  const { settings, setSettings } = useStore()
+  const { settings, setSettings, currentWorkspaceId } = useStore()
+  // What Claude, Apollo and Apify have cost since the 1st, from the Usage log.
+  const usage = useApi(() => fetchUsage(currentWorkspaceId, new Date().getDate()), [currentWorkspaceId])
+  const spent = usage.data?.providers.reduce((sum, p) => sum + p.costUsd, 0) ?? 0
   const [draft, setDraft] = useState({
     defaultModel: settings.defaultModel,
     postsPerLead: String(settings.postsPerLead),
@@ -74,10 +78,10 @@ export default function SettingsPage() {
     parsed.maxPostAgeDays !== settings.maxPostAgeDays ||
     parsed.monthlyBudgetUsd !== settings.monthlyBudgetUsd
 
-  const ratio = settings.spentThisMonthUsd / settings.monthlyBudgetUsd
+  const ratio = spent / settings.monthlyBudgetUsd
   const over = ratio >= 1
   const near = ratio >= WARN_AT
-  const remaining = settings.monthlyBudgetUsd - settings.spentThisMonthUsd
+  const remaining = settings.monthlyBudgetUsd - spent
 
   const save = () => {
     setSettings((s) => ({ ...s, defaultModel: draft.defaultModel, ...parsed }))
@@ -106,7 +110,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description={`Auto-send threshold ${settings.scoring.threshold} · auto-send ${settings.scoring.autoSend ? "on" : "off"} · ${formatUsd(settings.spentThisMonthUsd)} of ${formatUsd(settings.monthlyBudgetUsd)} spent this month`}
+        description={`Auto-send threshold ${settings.scoring.threshold} · auto-send ${settings.scoring.autoSend ? "on" : "off"} · ${formatUsd(spent)} of ${formatUsd(settings.monthlyBudgetUsd)} spent this month`}
       />
       {/* Two columns of different weight: scoring and sending, which change often, get the wide one. */}
       <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-6 px-4 pb-10 md:px-8 xl:grid-cols-[minmax(0,1.7fr)_minmax(300px,1fr)]">
@@ -117,13 +121,6 @@ export default function SettingsPage() {
             description="Every drafted email gets an AI lead score. Below the threshold a person reviews it; at or above it, with auto-send on, it goes out on its own."
           >
             <AutoSendSettings />
-          </Panel>
-          <Panel
-            id="scoring-prompt"
-            title="Email scoring prompt"
-            description="Scores every drafted email from 0 to 100 by how close it is to the emails rated good and the sample email, and how far from the ones rated bad, with reasons."
-          >
-            <ScoringPromptEditor />
           </Panel>
           <Panel
             id="feedback"
@@ -142,9 +139,9 @@ export default function SettingsPage() {
         </div>
 
         <div className="min-w-0 space-y-6">
-          <Panel title="Spend this month" description="Enrichment, drafting and scoring. Resets on the 1st.">
+          <Panel title="Spend this month" description={usage.error ? `Couldn't load spend: ${usage.error}` : "Claude, Apollo and Apify, from the Usage page. Resets on the 1st."}>
           <div className="flex items-baseline gap-2">
-            <span className="text-[28px] leading-9 tabular-nums">{formatUsd(settings.spentThisMonthUsd)}</span>
+            <span className="text-[28px] leading-9 tabular-nums">{formatUsd(spent)}</span>
             <span className="text-sm text-muted-foreground tabular-nums">of {formatUsd(settings.monthlyBudgetUsd)}</span>
             <span className="ml-auto text-sm text-muted-foreground tabular-nums">{Math.round(ratio * 100)}%</span>
           </div>
@@ -202,7 +199,7 @@ export default function SettingsPage() {
             </div>
           </form>
           </Panel>
-          <Panel title="API connections" description="Providers connect once the backend exists. Until then everything runs on sample data.">
+          <Panel title="API connections" description="The services the backend uses. Each one's key is set in the backend's .env file, not here.">
           <ul className="-my-3 divide-y divide-rule">
             {CONNECTIONS.map((c) => (
               <li key={c.name} className="flex items-center gap-3 py-3">
@@ -210,10 +207,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium">{c.name}</p>
                   <p className="truncate text-[13px] text-muted-foreground">{c.purpose}</p>
                 </div>
-                <Pill>Not connected</Pill>
-                <Button size="sm" variant="outline" disabled title="Available once the backend is connected">
-                  Connect
-                </Button>
+                <code className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{c.env}</code>
               </li>
             ))}
           </ul>

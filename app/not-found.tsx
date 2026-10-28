@@ -12,7 +12,7 @@ export default function NotFound() {
         <EmptyState
           icon={SearchX}
           title="This page doesn't exist"
-          description="If you created it earlier, note that mock data resets when the page is refreshed."
+          description="The link may be old, or what it pointed to was deleted."
           action={
             <Button asChild variant="outline">
               <Link href="/icps">Back to ICPs</Link>

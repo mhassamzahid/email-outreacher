@@ -7,8 +7,7 @@ import { LeadStatusBadge, ScoreBadge } from "@/components/status"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { fullName, shortDate } from "@/lib/format"
-import { leadSources } from "@/lib/mock-data"
+import { fullName, leadSources, shortDate } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import type { Lead } from "@/lib/types"
 
@@ -25,14 +24,11 @@ export function LeadsTable({
   onSelectedChange: (next: Set<string>) => void
   showIcp?: boolean
 }) {
-  const { icps, items, settings } = useStore()
+  const { icps, settings } = useStore()
   const [page, setPage] = useState(0)
   const pageCount = Math.max(1, Math.ceil(leads.length / PAGE_SIZE))
   const current = Math.min(page, pageCount - 1)
   const rows = leads.slice(current * PAGE_SIZE, (current + 1) * PAGE_SIZE)
-
-  const itemCount = new Map<string, number>()
-  for (const it of items) itemCount.set(it.leadId, (itemCount.get(it.leadId) ?? 0) + 1)
 
   const allOnPage = rows.length > 0 && rows.every((l) => selected.has(l.id))
   const someOnPage = rows.some((l) => selected.has(l.id))
@@ -71,7 +67,7 @@ export function LeadsTable({
               <TableHead>Title</TableHead>
               {showIcp && <TableHead>ICP</TableHead>}
               <TableHead>Sources</TableHead>
-              <TableHead className="text-right">Items</TableHead>
+              <TableHead className="text-right">Posts</TableHead>
               <TableHead className="text-right">Score</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Added</TableHead>
@@ -101,7 +97,7 @@ export function LeadsTable({
                 <TableCell>
                   <SourceIcons sources={leadSources(lead)} />
                 </TableCell>
-                <TableCell className="text-right tabular-nums">{itemCount.get(lead.id) ?? 0}</TableCell>
+                <TableCell className="text-right tabular-nums">{lead.postCount}</TableCell>
                 <TableCell className="text-right">
                   <ScoreBadge value={lead.score?.value} threshold={settings.scoring.threshold} />
                 </TableCell>

@@ -1,48 +1,53 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useMemo, useRef, useState, type DragEvent } from "react"
+import { useRef, useState, type DragEvent } from "react"
 import { AlertTriangle, ArrowLeft, Download, FileUp } from "lucide-react"
 import { toast } from "sonner"
-import { SourceIcons } from "@/components/source-icon"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useIcpParam } from "@/hooks/use-icp"
-import { downloadCsv, parseCsv, toCsv } from "@/lib/csv"
-import { fullName, formatUsd } from "@/lib/format"
-import { LEAD_FIELDS, SAMPLE_CSV, buildImport, downloadLeadTemplate, suggestMapping, type MappingTarget } from "@/lib/import"
-import { estimateEnrichmentCost } from "@/lib/mock-actions"
-import { leadSources } from "@/lib/mock-data"
+import { LEADS_TEMPLATE_URL, importLeadsCsv, type LeadImportResult } from "@/lib/api"
+import { parseCsv } from "@/lib/csv"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
-interface Parsed {
+// Rows shown in the preview; the counts on the right cover the whole file.
+const PREVIEW_ROWS = 50
+
+const FIELD_LABEL: Record<string, string> = {
+  firstName: "First name",
+  lastName: "Last name",
+  email: "Email",
+  company: "Company",
+  title: "Title",
+  website: "Website",
+  linkedinUrl: "LinkedIn URL",
+  instagramUrl: "Instagram URL",
+  facebookUrl: "Facebook URL",
+}
+
+const OUTCOME_LABEL = { imported: "Imports", duplicate: "Duplicate", invalid: "Skipped" } as const
+
+interface Loaded {
   fileName: string
-  headers: string[]
-  rows: string[][]
+  csv: string
+  table: string[][]
+  preview: LeadImportResult
 }
 
 export default function ImportPage() {
   const icp = useIcpParam()
-  const { leads, settings, addLeads } = useStore()
+  const { currentWorkspaceId, reloadLeads } = useStore()
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [parsed, setParsed] = useState<Parsed | null>(null)
-  const [mapping, setMapping] = useState<MappingTarget[]>([])
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [dragging, setDragging] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const [importing, setImporting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const existingEmails = useMemo(
-    () => new Set(leads.filter((l) => l.icpId === icp?.id).map((l) => l.email.toLowerCase())),
-    [leads, icp?.id],
-  )
-  const result = useMemo(
-    () => (parsed && icp ? buildImport(parsed.headers, parsed.rows, mapping, icp.id, existingEmails) : null),
-    [parsed, mapping, icp, existingEmails],
-  )
   if (!icp) return null
 
   const readFile = async (file: File) => {
@@ -51,14 +56,21 @@ export default function ImportPage() {
       setError("That file isn't a CSV. Export your list as .csv and try again.")
       return
     }
-    const table = parseCsv(await file.text())
+    const csv = await file.text()
+    const table = parseCsv(csv)
     if (table.length < 2) {
       setError("We couldn't find any data rows. Check that the first row has column headers and the rest have leads.")
       return
     }
-    const [headers, ...rows] = table
-    setParsed({ fileName: file.name, headers, rows })
-    setMapping(suggestMapping(headers))
+    setChecking(true)
+    try {
+      const preview = await importLeadsCsv(currentWorkspaceId, icp.id, csv, true)
+      setLoaded({ fileName: file.name, csv, table, preview })
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't check the file. Try again.")
+    } finally {
+      setChecking(false)
+    }
   }
 
   const onDrop = (e: DragEvent) => {
@@ -68,24 +80,30 @@ export default function ImportPage() {
     if (file) void readFile(file)
   }
 
-  const emailMapped = mapping.includes("email")
-  const estimate = result ? estimateEnrichmentCost(result.leads, icp.enabledSources, settings.postsPerLead) : null
-
-  const confirm = () => {
-    if (!result) return
-    addLeads(result.leads)
-    toast.success(`Imported ${result.leads.length} leads into ${icp.name}`)
-    router.push(`/icps/${icp.id}/leads`)
+  const confirm = async () => {
+    if (!loaded) return
+    setImporting(true)
+    try {
+      const r = await importLeadsCsv(currentWorkspaceId, icp.id, loaded.csv, false)
+      toast.success(`Imported ${r.imported} lead${r.imported === 1 ? "" : "s"} into ${icp.name}`)
+      reloadLeads()
+      router.push(`/icps/${icp.id}/leads`)
+    } catch (e) {
+      toast.error("Couldn't import them", { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setImporting(false)
+    }
   }
 
-  if (!parsed || !result) {
+  if (!loaded) {
     return (
       <div className="mx-auto max-w-2xl space-y-4">
         <div
           role="button"
           tabIndex={0}
-          onClick={() => inputRef.current?.click()}
-          onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && inputRef.current?.click()}
+          aria-disabled={checking}
+          onClick={() => !checking && inputRef.current?.click()}
+          onKeyDown={(e) => !checking && (e.key === "Enter" || e.key === " ") && inputRef.current?.click()}
           onDragOver={(e) => {
             e.preventDefault()
             setDragging(true)
@@ -98,8 +116,10 @@ export default function ImportPage() {
           )}
         >
           <FileUp className="size-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Drop a CSV here, or click to choose a file</p>
-          <p className="text-xs text-muted-foreground">One lead per row with a header row. Email is required.</p>
+          <p className="text-sm font-medium">{checking ? "Checking the file…" : "Drop a CSV here, or click to choose a file"}</p>
+          <p className="text-xs text-muted-foreground">
+            One lead per row with a header row. Each lead needs an email or a LinkedIn URL. Apollo exports work as they are.
+          </p>
           <input
             ref={inputRef}
             type="file"
@@ -117,53 +137,56 @@ export default function ImportPage() {
             <AlertTriangle className="size-4" /> {error}
           </p>
         )}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-          <Button variant="link" className="px-0" onClick={downloadLeadTemplate}>
+        <Button variant="link" className="px-0" asChild>
+          <a href={LEADS_TEMPLATE_URL} download>
             <Download /> Download template
-          </Button>
-          <Button
-            variant="link"
-            className="px-0 font-normal text-muted-foreground!"
-            onClick={() => downloadCsv("sample-leads.csv", toCsv(SAMPLE_CSV))}
-          >
-            Download sample with test rows
-          </Button>
-        </div>
+          </a>
+        </Button>
       </div>
     )
   }
 
-  const { stats } = result
-  const dropped = stats.missingEmail + stats.duplicatesInFile + stats.duplicatesExisting
-  const summary: [string, number | string, boolean?][] = [
-    ["Rows in file", stats.totalRows],
-    ["Leads to import", result.leads.length],
-    ["Duplicates removed (in file)", stats.duplicatesInFile, stats.duplicatesInFile > 0],
-    ["Already in this ICP", stats.duplicatesExisting, stats.duplicatesExisting > 0],
-    ["Missing email (skipped)", stats.missingEmail, stats.missingEmail > 0],
-    ["With LinkedIn URL", stats.withLinkedin],
-    ["With Instagram URL", stats.withInstagram],
-    ["With Facebook URL", stats.withFacebook],
-    ["With website", `${stats.withWebsite} (${stats.websitesDerived} from email domain)`],
+  const { preview, table } = loaded
+  const [headers, ...rows] = table
+  const emailCol = headers.findIndex((_, i) => preview.columns[i]?.field === "email")
+  const nameCols = ["firstName", "lastName"].map((f) => preview.columns.findIndex((c) => c.field === f))
+  const who = (row: number) => {
+    const cells = rows[row - 2] ?? []
+    const name = nameCols
+      .filter((i) => i >= 0)
+      .map((i) => cells[i]?.trim())
+      .filter(Boolean)
+      .join(" ")
+    const email = emailCol >= 0 ? cells[emailCol]?.trim() : ""
+    return [name, email].filter(Boolean).join(" · ") || `Row ${row}`
+  }
+  const summary: [string, number, boolean?][] = [
+    ["Rows in file", preview.totalRows],
+    ["Leads to import", preview.imported],
+    ["Repeated in this file", preview.duplicatesInFile, preview.duplicatesInFile > 0],
+    ["Already in this workspace", preview.duplicatesExisting, preview.duplicatesExisting > 0],
+    ["Skipped (no email or LinkedIn)", preview.invalid, preview.invalid > 0],
+    ["Websites taken from the email", preview.websitesFromEmail],
   ]
+  const dropped = preview.totalRows - preview.imported
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="ghost" size="sm" onClick={() => setParsed(null)}>
+        <Button variant="ghost" size="sm" onClick={() => setLoaded(null)} disabled={importing}>
           <ArrowLeft /> Choose another file
         </Button>
-        <span className="text-sm text-muted-foreground">{parsed.fileName}</span>
+        <span className="text-sm text-muted-foreground">{loaded.fileName}</span>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Map columns</CardTitle>
+              <CardTitle>Columns</CardTitle>
               <CardDescription>
-                Suggested from your headers. Columns you don&apos;t map are kept as custom fields, usable in prompts as{" "}
-                <code className="font-mono text-xs">{"{{lead.extra.column}}"}</code>.
+                Matched from your headers. Columns that don&apos;t match a lead field are kept as custom fields, usable in
+                prompts as <code className="font-mono text-xs">{"{{lead.extra.column}}"}</code>.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -172,39 +195,18 @@ export default function ImportPage() {
                   <TableRow>
                     <TableHead>CSV column</TableHead>
                     <TableHead>Sample</TableHead>
-                    <TableHead className="w-56">Maps to</TableHead>
+                    <TableHead>Fills</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {parsed.headers.map((h, col) => (
+                  {preview.columns.map((c, col) => (
                     <TableRow key={col}>
-                      <TableCell className="font-medium">{h || `Column ${col + 1}`}</TableCell>
+                      <TableCell className="font-medium">{c.column || `Column ${col + 1}`}</TableCell>
                       <TableCell className="max-w-56 truncate text-muted-foreground">
-                        {parsed.rows.find((r) => r[col]?.trim())?.[col] ?? ""}
+                        {rows.find((r) => r[col]?.trim())?.[col] ?? ""}
                       </TableCell>
-                      <TableCell>
-                        <Select
-                          value={mapping[col]}
-                          onValueChange={(v) =>
-                            setMapping((m) =>
-                              m.map((t, i) => (i === col ? (v as MappingTarget) : t === v ? "__extra__" : t)),
-                            )
-                          }
-                        >
-                          <SelectTrigger size="sm" className="w-full!" aria-label={`Map ${h}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {LEAD_FIELDS.map((f) => (
-                              <SelectItem key={f.field} value={f.field}>
-                                {f.label}
-                              </SelectItem>
-                            ))}
-                            <SelectSeparator />
-                            <SelectItem value="__extra__">Custom field (extra)</SelectItem>
-                            <SelectItem value="__ignore__">Don&apos;t import</SelectItem>
-                          </SelectContent>
-                        </Select>
+                      <TableCell className={cn(!c.field && "text-muted-foreground")}>
+                        {c.field ? (FIELD_LABEL[c.field] ?? c.field) : "Custom field"}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -215,58 +217,35 @@ export default function ImportPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Preview</CardTitle>
-              <CardDescription>First 5 rows as they will be imported.</CardDescription>
+              <CardTitle>Rows</CardTitle>
+              <CardDescription>
+                {preview.rows.length > PREVIEW_ROWS
+                  ? `The first ${PREVIEW_ROWS} of ${preview.rows.length} rows and what happens to each.`
+                  : "Every row and what happens to it."}
+              </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Company</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Website</TableHead>
-                    <TableHead>Sources</TableHead>
-                    <TableHead>Extra</TableHead>
+                    <TableHead className="w-16">Row</TableHead>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Outcome</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {result.rowOutcome.slice(0, 5).map((outcome, i) => {
-                    if (typeof outcome !== "number")
-                      return (
-                        <TableRow key={i} className="text-muted-foreground">
-                          <TableCell colSpan={7}>
-                            Row {i + 2} skipped: {outcome === "duplicate" ? "duplicate email" : "missing email"}
-                          </TableCell>
-                        </TableRow>
-                      )
-                    const lead = result.leads[outcome]
-                    return (
-                      <TableRow key={i}>
-                        <TableCell className="font-medium">{fullName(lead) || "–"}</TableCell>
-                        <TableCell>{lead.email}</TableCell>
-                        <TableCell>{lead.company || "–"}</TableCell>
-                        <TableCell className="text-muted-foreground">{lead.title || "–"}</TableCell>
-                        <TableCell className="whitespace-nowrap">
-                          {lead.website.replace(/^https?:\/\//, "") || "–"}
-                          {result.derivedWebsite.has(outcome) && (
-                            <Badge variant="secondary" className="ml-1.5 font-normal">
-                              from email
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <SourceIcons sources={leadSources(lead)} />
-                        </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">
-                          {Object.entries(lead.extra)
-                            .map(([k, v]) => `${k}: ${v}`)
-                            .join(", ") || "–"}
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
+                  {preview.rows.slice(0, PREVIEW_ROWS).map((r) => (
+                    <TableRow key={r.row} className={cn(r.outcome !== "imported" && "text-muted-foreground")}>
+                      <TableCell className="tabular-nums">{r.row}</TableCell>
+                      <TableCell className="max-w-72 truncate">{who(r.row)}</TableCell>
+                      <TableCell>
+                        <Badge variant={r.outcome === "imported" ? "secondary" : "outline"} className="font-normal">
+                          {OUTCOME_LABEL[r.outcome]}
+                        </Badge>
+                        {r.reason && <span className="ml-2 text-xs">{r.reason}</span>}
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
@@ -275,15 +254,10 @@ export default function ImportPage() {
 
         <Card className="h-fit xl:sticky xl:top-4">
           <CardHeader>
-            <CardTitle>Validation</CardTitle>
-            <CardDescription>Check this before importing. Nothing runs until you enrich.</CardDescription>
+            <CardTitle>Check before importing</CardTitle>
+            <CardDescription>Nothing is fetched or written until you run it from the leads tab.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!emailMapped && (
-              <p className="flex items-start gap-2 rounded-lg bg-destructive/10 p-2 text-sm text-destructive">
-                <AlertTriangle className="mt-0.5 size-4 shrink-0" /> Map a column to Email to continue.
-              </p>
-            )}
             <dl className="space-y-1.5 text-sm">
               {summary.map(([label, value, warn]) => (
                 <div key={label} className="flex justify-between gap-4">
@@ -292,16 +266,13 @@ export default function ImportPage() {
                 </div>
               ))}
             </dl>
-            <div className="flex justify-between border-t pt-3 text-sm">
-              <span>Estimated enrichment cost</span>
-              <span className="font-medium tabular-nums">{formatUsd(estimate?.total ?? 0)}</span>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Based on enabled sources for this ICP at {settings.postsPerLead} posts per source.
-              {dropped > 0 && ` ${dropped} row${dropped === 1 ? "" : "s"} will not be imported.`}
-            </p>
-            <Button className="w-full" disabled={!emailMapped || result.leads.length === 0} onClick={confirm}>
-              Import {result.leads.length} lead{result.leads.length === 1 ? "" : "s"}
+            {dropped > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {dropped} row{dropped === 1 ? "" : "s"} won&apos;t be imported.
+              </p>
+            )}
+            <Button className="w-full" disabled={importing || preview.imported === 0} onClick={() => void confirm()}>
+              {importing ? "Importing…" : `Import ${preview.imported} lead${preview.imported === 1 ? "" : "s"}`}
             </Button>
           </CardContent>
         </Card>

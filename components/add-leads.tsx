@@ -27,9 +27,20 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { fullName } from "@/lib/format"
-import { EMAIL_PATTERN, createLead, downloadLeadTemplate, websiteFromEmail, type LeadField } from "@/lib/import"
+import { LEADS_TEMPLATE_URL } from "@/lib/api"
+import { EMAIL_PATTERN, fullName } from "@/lib/format"
 import { useStore } from "@/lib/store"
+
+type LeadField =
+  | "firstName"
+  | "lastName"
+  | "email"
+  | "company"
+  | "title"
+  | "website"
+  | "linkedinUrl"
+  | "instagramUrl"
+  | "facebookUrl"
 
 /** "Add leads" menu: import a CSV or add one lead by hand. Without an ICP it asks which one. */
 export function AddLeadsMenu({ icpId, variant = "outline" }: { icpId?: string; variant?: "default" | "outline" }) {
@@ -70,8 +81,10 @@ export function AddLeadsMenu({ icpId, variant = "outline" }: { icpId?: string; v
             <UserPlus /> Add manually
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={downloadLeadTemplate}>
-            <Download /> Download CSV template
+          <DropdownMenuItem asChild>
+            <a href={LEADS_TEMPLATE_URL} download>
+              <Download /> Download CSV template
+            </a>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -123,49 +136,56 @@ function Field({
 }
 
 export function AddLeadDialog({ icpId: fixedIcpId, onClose }: { icpId?: string; onClose: () => void }) {
-  const { icps, leads, addLeads } = useStore()
+  const { icps, leads, addLead } = useStore()
   const [icpId, setIcpId] = useState(fixedIcpId ?? (icps.length === 1 ? icps[0].id : ""))
   const [fields, setFields] = useState<Fields>(EMPTY)
   const [extras, setExtras] = useState<{ key: string; value: string }[]>([])
   const [touched, setTouched] = useState<Partial<Record<"email" | "icp", boolean>>>({})
+  const [busy, setBusy] = useState(false)
   const firstRef = useRef<HTMLInputElement>(null)
 
   const icp = icps.find((i) => i.id === icpId)
   const email = fields.email.trim().toLowerCase()
-  const duplicate = !!icpId && !!email && leads.some((l) => l.icpId === icpId && l.email.toLowerCase() === email)
+  const duplicate = !!email && leads.some((l) => l.email.toLowerCase() === email)
   const errors = {
-    email: !email
-      ? "Add an email address. It's how leads are matched and deduplicated."
-      : !EMAIL_PATTERN.test(email)
-        ? "That doesn't look like an email address. Check for a missing @ or domain."
-        : duplicate
-          ? `This email is already a lead in ${icp?.name}.`
-          : "",
+    email:
+      !email && !fields.linkedinUrl.trim()
+        ? "Add an email address or a LinkedIn URL. They're how leads are matched and deduplicated."
+        : email && !EMAIL_PATTERN.test(email)
+          ? "That doesn't look like an email address. Check for a missing @ or domain."
+          : duplicate
+            ? "This email is already a lead in this workspace."
+            : "",
     icp: icpId ? "" : "Choose which ICP this lead belongs to.",
     extras: extras.some((x) => x.value.trim() && !x.key.trim()) ? "Give each custom field a name." : "",
   }
   const valid = !errors.email && !errors.icp && !errors.extras
-  const derived = !fields.website.trim() && EMAIL_PATTERN.test(email) ? websiteFromEmail(email) : ""
 
   const set = (key: LeadField) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((f) => ({ ...f, [key]: e.target.value }))
 
-  const submit = (addAnother: boolean) => {
+  const submit = async (addAnother: boolean) => {
     setTouched({ email: true, icp: true })
     if (!valid || !icp) return
     const extra = Object.fromEntries(
       extras.filter((x) => x.key.trim() && x.value.trim()).map((x) => [x.key.trim(), x.value.trim()]),
     )
-    const { lead } = createLead(fields, extra, icp.id)
-    addLeads([lead])
-    toast.success(`Added ${fullName(lead) || lead.email} to ${icp.name}`)
-    if (addAnother) {
-      setFields(EMPTY)
-      setExtras([])
-      setTouched({})
-      firstRef.current?.focus()
-    } else {
-      onClose()
+    setBusy(true)
+    try {
+      const lead = await addLead({ ...fields, icpId: icp.id, extra })
+      toast.success(`Added ${fullName(lead) || lead.email || "the lead"} to ${icp.name}`)
+      if (addAnother) {
+        setFields(EMPTY)
+        setExtras([])
+        setTouched({})
+        firstRef.current?.focus()
+      } else {
+        onClose()
+      }
+    } catch (e) {
+      toast.error("Couldn't add them", { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -179,7 +199,9 @@ export function AddLeadDialog({ icpId: fixedIcpId, onClose }: { icpId?: string; 
         <DialogHeader>
           <DialogTitle>Add a lead</DialogTitle>
           <DialogDescription>
-            {icp && fixedIcpId ? `Goes into ${icp.name} as Not enriched.` : "The lead starts as Not enriched, ready for enrichment."}
+            {icp && fixedIcpId
+              ? `Goes into ${icp.name}, ready to fetch posts and write an email.`
+              : "Ready to fetch posts and write an email. Needs an email or a LinkedIn URL."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -187,7 +209,7 @@ export function AddLeadDialog({ icpId: fixedIcpId, onClose }: { icpId?: string; 
           noValidate
           onSubmit={(e) => {
             e.preventDefault()
-            submit(false)
+            void submit(false)
           }}
         >
           {!fixedIcpId && (
@@ -222,7 +244,6 @@ export function AddLeadDialog({ icpId: fixedIcpId, onClose }: { icpId?: string; 
             {input("email", {
               type: "email",
               inputMode: "email",
-              required: true,
               placeholder: "name@company.com",
               onBlur: () => setTouched((t) => ({ ...t, email: true })),
               "aria-invalid": (touched.email && !!errors.email) || undefined,
@@ -239,15 +260,7 @@ export function AddLeadDialog({ icpId: fixedIcpId, onClose }: { icpId?: string; 
             id="lead-website"
             label="Website"
             className="sm:col-span-2"
-            hint={
-              fields.website.trim()
-                ? undefined
-                : derived
-                  ? `Left blank, it will be ${derived.replace("https://", "")} from the email domain.`
-                  : EMAIL_PATTERN.test(email)
-                    ? "Free email address, so no website is filled in."
-                    : "Left blank, it's taken from the email domain."
-            }
+            hint={fields.website.trim() ? undefined : "Left blank, it's taken from a work email's domain."}
           >
             {input("website", { placeholder: "company.com", "aria-describedby": "lead-website-note" })}
           </Field>
@@ -307,13 +320,15 @@ export function AddLeadDialog({ icpId: fixedIcpId, onClose }: { icpId?: string; 
           </div>
 
           <DialogFooter className="sm:col-span-2">
-            <Button type="button" variant="ghost" onClick={onClose}>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>
               Cancel
             </Button>
-            <Button type="button" variant="outline" onClick={() => submit(true)}>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => void submit(true)}>
               Add and start another
             </Button>
-            <Button type="submit">Add lead</Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Adding…" : "Add lead"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -9,23 +9,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
+import { fetchEmails, useApi } from "@/lib/api"
 import { scoreHistogram } from "@/lib/scoring"
-import { generationByLead } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 import type { ScoringSettings } from "@/lib/types"
 
 /** Threshold, auto-send and daily cap. One Save for the panel; turning auto-send on asks first. */
 export function AutoSendSettings() {
-  const { settings, setSettings, leads, generations, templates } = useStore()
+  const { settings, setSettings, templates, currentWorkspaceId } = useStore()
+  const emails = useApi(() => fetchEmails(currentWorkspaceId), [currentWorkspaceId])
   const [draft, setDraft] = useState<ScoringSettings>(settings.scoring)
   const [confirmOn, setConfirmOn] = useState(false)
   const set = <K extends keyof ScoringSettings>(key: K, value: ScoringSettings[K]) => setDraft((d) => ({ ...d, [key]: value }))
 
-  const genMap = generationByLead(generations)
-  const scored = leads
-    .filter((l) => l.score && genMap.has(l.id))
-    .map((l) => ({ score: l.score!.value, flagged: genMap.get(l.id)!.flags.length > 0 }))
+  // Unsent drafts the Email Scoring prompt scored; skipped and sent ones no longer matter here.
+  const scored = (emails.data ?? [])
+    .filter((e) => e.score !== null && (e.status === "draft" || e.status === "edited"))
+    .map((e) => ({ score: e.score!, flagged: e.flags.length > 0 }))
   const t = draft.threshold
   const bins = scoreHistogram(scored.map((s) => s.score))
   const tallest = Math.max(1, ...bins)
@@ -108,7 +109,7 @@ export function AutoSendSettings() {
         </div>
         <p className={cn("text-sm", errors.threshold && "text-destructive")}>
           {errors.threshold ||
-            `${clear} of ${scored.length} scored leads score ${t} or more with no flags.${
+            `${clear} of ${scored.length} scored drafts score ${t} or more with no flags.${
               flaggedAbove ? ` ${flaggedAbove} more clear it but are flagged, so a person still reviews them.` : ""
             }`}
         </p>

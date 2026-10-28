@@ -28,6 +28,16 @@ export function fullName(lead: Pick<Lead, "firstName" | "lastName">): string {
   return `${lead.firstName} ${lead.lastName}`.trim()
 }
 
+/** The profiles a lead has a URL for. */
+export function leadSources(lead: Pick<Lead, "linkedinUrl" | "instagramUrl" | "facebookUrl" | "website">): Source[] {
+  const out: Source[] = []
+  if (lead.linkedinUrl) out.push("linkedin")
+  if (lead.instagramUrl) out.push("instagram")
+  if (lead.facebookUrl) out.push("facebook")
+  if (lead.website) out.push("website")
+  return out
+}
+
 export const LEAD_STATUS_LABEL: Record<LeadStatus, string> = {
   imported: "Not enriched",
   enriching: "Enriching",
@@ -72,11 +82,15 @@ export const FLAG_LABEL: Record<GenerationFlag, string> = {
   sensitive_topic: "Sensitive topic",
   repost: "Repost",
   old_content: "Old content",
-  low_relevance: "Low relevance",
-  word_count: "Word count",
+  thin_material: "Thin material",
+  no_hook: "No hook",
+  not_scored: "Not scored",
 }
 
-// OpenAI API model IDs: flagship, balanced (default), cost-sensitive high volume.
+/** A flag's label, or the flag itself when it's one this list doesn't know yet. */
+export const flagLabel = (flag: string) => FLAG_LABEL[flag as GenerationFlag] ?? flag.replaceAll("_", " ")
+
+// Claude model IDs: cost-sensitive high volume (default), balanced, most capable.
 export const MODELS = ["claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5"]
 
 /** First sentence after the greeting, used as a preview in tables. */
@@ -92,3 +106,6 @@ export function compactCount(n: number): string {
   const k = n / 1000
   return `${k < 10 ? k.toFixed(1).replace(/\.0$/, "") : Math.round(k)}k`
 }
+
+/** Loose check: something@domain.tld. The backend validates again. */
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

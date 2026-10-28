@@ -4,6 +4,7 @@ import { useState } from "react"
 import { ArrowRightLeft, Search, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { AddLeadsMenu } from "@/components/add-leads"
+import { BackendError } from "@/components/companies/backend-state"
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { LeadsTable } from "@/components/leads-table"
@@ -21,15 +22,14 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useMockLoading } from "@/hooks/use-mock-loading"
-import { LEAD_STATUS_LABEL, SOURCE_LABEL, fullName } from "@/lib/format"
-import { leadSources } from "@/lib/mock-data"
+import { LEAD_STATUS_LABEL, SOURCE_LABEL, fullName, leadSources } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { LEAD_STATUSES, SOURCES } from "@/lib/types"
 
 export default function LeadsPage() {
-  const { leads, icps, moveLeads, deleteLeads } = useStore()
-  const loading = useMockLoading()
+  const { leads, leadsStatus, leadsError, reloadLeads, icps, moveLeads, deleteLeads } = useStore()
+  const loading = leadsStatus === "loading"
+  const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState("")
   const [icpFilter, setIcpFilter] = useState("all")
   const [status, setStatus] = useState("all")
@@ -130,13 +130,15 @@ export default function LeadsPage() {
           </div>
         </div>
 
-        {loading ? (
+        {leadsStatus === "error" ? (
+          <BackendError message={leadsError ?? ""} onRetry={reloadLeads} />
+        ) : loading ? (
           <TableSkeleton />
         ) : leads.length === 0 ? (
           <EmptyState
             icon={Users}
             title="No leads yet"
-            description="Import a CSV into an ICP or add leads one by one."
+            description="Leads come from people on the People page (Add as leads, or revealing an email), from a CSV, or one by one."
             action={<AddLeadsMenu variant="default" />}
           />
         ) : visible.length === 0 ? (
@@ -184,15 +186,22 @@ export default function LeadsPage() {
               Cancel
             </Button>
             <Button
-              disabled={!moveTarget}
-              onClick={() => {
-                moveLeads(ids, moveTarget)
-                setMoveOpen(false)
-                setSelected(new Set())
-                toast.success(`Moved ${ids.length} lead${ids.length === 1 ? "" : "s"} to ${icps.find((i) => i.id === moveTarget)?.name}`)
+              disabled={!moveTarget || busy}
+              onClick={async () => {
+                setBusy(true)
+                try {
+                  await moveLeads(ids, moveTarget)
+                  setMoveOpen(false)
+                  setSelected(new Set())
+                  toast.success(`Moved ${ids.length} lead${ids.length === 1 ? "" : "s"} to ${icps.find((i) => i.id === moveTarget)?.name}`)
+                } catch (e) {
+                  toast.error("Couldn't move them", { description: e instanceof Error ? e.message : undefined })
+                } finally {
+                  setBusy(false)
+                }
               }}
             >
-              Move leads
+              {busy ? "Moving…" : "Move leads"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -203,12 +212,16 @@ export default function LeadsPage() {
         onOpenChange={setDeleteOpen}
         destructive
         title={`Delete ${ids.length} lead${ids.length === 1 ? "" : "s"}?`}
-        description="Their enrichment content and email drafts are deleted too. This can't be undone."
+        description="Their posts, hooks, drafts and ratings are deleted too. The people they came from stay on the People page. This can't be undone."
         confirmLabel={`Delete ${ids.length} lead${ids.length === 1 ? "" : "s"}`}
-        onConfirm={() => {
-          deleteLeads(ids)
-          setSelected(new Set())
-          toast.success(`Deleted ${ids.length} lead${ids.length === 1 ? "" : "s"}`)
+        onConfirm={async () => {
+          try {
+            await deleteLeads(ids)
+            setSelected(new Set())
+            toast.success(`Deleted ${ids.length} lead${ids.length === 1 ? "" : "s"}`)
+          } catch (e) {
+            toast.error("Couldn't delete them", { description: e instanceof Error ? e.message : undefined })
+          }
         }}
       />
     </>

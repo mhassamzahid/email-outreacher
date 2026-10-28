@@ -38,7 +38,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useMockLoading } from "@/hooks/use-mock-loading"
 import { daysSince, shortDate } from "@/lib/format"
 import { PERMISSIONS, ROLE_ACCESS, ROLE_LABEL, USER_STATUS_LABEL, otherActiveAdmins } from "@/lib/roles"
 import { useStore } from "@/lib/store"
@@ -119,7 +118,6 @@ export function UsersView({ initialTab }: { initialTab: UsersTab }) {
 
 function UsersTable({ onInvite }: { onInvite: () => void }) {
   const { users, workspaces, currentUserId, updateUser, removeUser } = useStore()
-  const loading = useMockLoading()
   const [query, setQuery] = useState("")
   const [roleFilter, setRoleFilter] = useState<Role | "all">("all")
   const [editing, setEditing] = useState<{ user: User; role?: Role } | null>(null)
@@ -177,9 +175,7 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
         </Select>
       </div>
 
-      {loading ? (
-        <TableSkeleton rows={5} />
-      ) : shown.length === 0 ? (
+      {shown.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
           title={users.length ? "No users match" : "No users yet"}

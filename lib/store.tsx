@@ -1,71 +1,28 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react"
-import { toast } from "sonner"
 import * as api from "./api"
-import * as mock from "./mock-data"
-import { runEnrichment, runGeneration, runScoring, uid } from "./mock-actions"
-import { COST_PER_SCORE, autoSentToday, sendDecision } from "./scoring"
-import { currentVersion, generationByLead, resolveScoringTemplate, resolveTemplate } from "./selectors"
-import type {
-  EnrichmentItem,
-  Generation,
-  GenerationStatus,
-  ICP,
-  IcpOutreach,
-  Lead,
-  LeadStatus,
-  PromptKind,
-  PromptTemplate,
-  PromptVersion,
-  Settings,
-  Source,
-  User,
-  Workspace,
-} from "./types"
+import { CURRENT_USER_ID, DEFAULT_SETTINGS, DEFAULT_USERS } from "./defaults"
+import type { ICP, IcpOutreach, Lead, PromptKind, PromptTemplate, PromptVersion, Settings, User, Workspace } from "./types"
 
-// Client-side app state shared across pages. Workspaces, ICPs and prompts come from the backend;
-// leads, enrichment and generations are still seeded from mock data and reset on refresh.
+// App state shared across pages. Workspaces, ICPs, leads and prompts come from the backend. Settings
+// and users still live only in this browser until they're stored in the backend.
 
-export interface SourceProgress {
-  done: number
-  found: number
-  empty: number
-  failed: number
-}
-
-export interface EnrichmentJob {
-  icpId: string
-  total: number
-  completed: number
-  bySource: Record<Source, SourceProgress>
-  outcomes: { enriched: number; no_content: number; failed: number }
-  costUsd: number
-  running: boolean
-}
-
-export interface GenerationJob {
-  icpId: string
-  total: number
-  completed: number
-  costUsd: number
-  running: boolean
-}
+const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
 export type VersionDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens" | "maxPosts">
 
 interface Store {
   icps: ICP[]
+  /** The workspace's leads, from the backend. Empty until loaded; see leadsStatus. */
   leads: Lead[]
-  setLeads: Dispatch<SetStateAction<Lead[]>>
-  items: EnrichmentItem[]
-  generations: Generation[]
+  leadsStatus: "loading" | "ready" | "error"
+  leadsError: string | null
+  reloadLeads: () => void
   templates: PromptTemplate[]
   versions: PromptVersion[]
   settings: Settings
   setSettings: Dispatch<SetStateAction<Settings>>
-  enrichJobs: Record<string, EnrichmentJob>
-  genJobs: Record<string, GenerationJob>
 
   /** Lead Intel's ICPs with this workspace's outreach settings. Empty until loaded; see icpsStatus. */
   icpsStatus: "loading" | "ready" | "error"
@@ -84,22 +41,12 @@ interface Store {
   createIcp: (input: api.IcpCreate, outreach?: Partial<IcpOutreach>) => Promise<{ icp: ICP; warning?: string }>
   /** Change an ICP's Lead Intel fields (name, industry, rule…) in Lead Intel. Rejects with the backend's reason. */
   updateIcpDefinition: (id: string, input: api.IcpCreate) => Promise<ICP>
-  addLeads: (leads: Lead[]) => void
-  moveLeads: (ids: string[], icpId: string) => void
-  deleteLeads: (ids: string[]) => void
-  startEnrichment: (icpId: string, leadIds: string[]) => Promise<void>
-  dismissEnrichJob: (icpId: string) => void
-  startGeneration: (
-    icpId: string,
-    leadIds: string[],
-    opts?: { instruction?: string; excludeItemIds?: string[]; reviewOnly?: boolean },
-  ) => Promise<void>
-  updateGeneration: (id: string, patch: Partial<Generation>) => void
-  setGenerationStatus: (ids: string[], status: GenerationStatus) => void
-  /** Marks approved emails as sent by a person (simulated: nothing leaves the app). */
-  sendGenerations: (ids: string[]) => void
-  /** Re-runs the scoring prompt for one lead's current draft. */
-  rescoreLead: (leadId: string) => Promise<void>
+  /** Add one lead in the backend. Rejects with the backend's reason (e.g. they're already a lead). */
+  addLead: (input: api.LeadInput) => Promise<Lead>
+  /** Move leads to another ICP in the backend. */
+  moveLeads: (ids: string[], icpId: string) => Promise<void>
+  /** Delete leads in the backend, with their posts and drafts. */
+  deleteLeads: (ids: string[]) => Promise<void>
   /** The workspace's prompts, from the backend. Empty until loaded; see promptsStatus. */
   promptsStatus: "loading" | "ready" | "error"
   promptsError: string | null
@@ -140,38 +87,22 @@ const StoreContext = createContext<Store | null>(null)
 
 const CURRENT_WORKSPACE_KEY = "eo.currentWorkspaceId"
 
-const emptyProgress = (): Record<Source, SourceProgress> => ({
-  linkedin: { done: 0, found: 0, empty: 0, failed: 0 },
-  instagram: { done: 0, found: 0, empty: 0, failed: 0 },
-  facebook: { done: 0, found: 0, empty: 0, failed: 0 },
-  website: { done: 0, found: 0, empty: 0, failed: 0 },
-})
-
-const LEAD_STATUS_FOR: Record<GenerationStatus, LeadStatus> = {
-  draft: "generated",
-  edited: "generated",
-  approved: "approved",
-  sent: "sent",
-  skipped: "skipped",
-}
-
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [icps, setIcps] = useState<ICP[]>([])
   const [icpsStatus, setIcpsStatus] = useState<Store["icpsStatus"]>("loading")
   const [icpsError, setIcpsError] = useState<string | null>(null)
   const [icpsTick, setIcpsTick] = useState(0)
-  const [leads, setLeads] = useState(mock.leads)
-  const [items, setItems] = useState(mock.enrichmentItems)
-  const [generations, setGenerations] = useState(mock.generations)
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [leadsStatus, setLeadsStatus] = useState<Store["leadsStatus"]>("loading")
+  const [leadsError, setLeadsError] = useState<string | null>(null)
+  const [leadsTick, setLeadsTick] = useState(0)
   const [templates, setTemplates] = useState<PromptTemplate[]>([])
   const [versions, setVersions] = useState<PromptVersion[]>([])
   const [promptsStatus, setPromptsStatus] = useState<Store["promptsStatus"]>("loading")
   const [promptsError, setPromptsError] = useState<string | null>(null)
   const [promptsTick, setPromptsTick] = useState(0)
-  const [settings, setSettings] = useState(mock.settings)
-  const [enrichJobs, setEnrichJobs] = useState<Record<string, EnrichmentJob>>({})
-  const [genJobs, setGenJobs] = useState<Record<string, GenerationJob>>({})
-  const [users, setUsers] = useState(mock.users)
+  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  const [users, setUsers] = useState(DEFAULT_USERS)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspacesStatus, setWorkspacesStatus] = useState<Store["workspacesStatus"]>("loading")
   const [workspacesError, setWorkspacesError] = useState<string | null>(null)
@@ -220,8 +151,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setWorkspacesTick((t) => t + 1)
   }, [])
 
-  const addSpend = (usd: number) =>
-    setSettings((s) => ({ ...s, spentThisMonthUsd: Math.round((s.spentThisMonthUsd + usd) * 10000) / 10000 }))
+  // Leads belong to the workspace; they reload when it changes or after a change is saved.
+  useEffect(() => {
+    if (!currentWorkspaceId) return
+    let live = true
+    api
+      .fetchLeads(currentWorkspaceId)
+      .then((list) => {
+        if (!live) return
+        setLeads(list)
+        setLeadsStatus("ready")
+        setLeadsError(null)
+      })
+      .catch((e: unknown) => {
+        if (!live) return
+        setLeadsStatus("error")
+        setLeadsError(e instanceof Error ? e.message : "Couldn't load leads.")
+      })
+    return () => {
+      live = false
+    }
+  }, [currentWorkspaceId, leadsTick])
+
+  const reloadLeads = useCallback(() => setLeadsTick((t) => t + 1), [])
 
   // ICPs come from Lead Intel (shared with it) plus this workspace's outreach settings, so they
   // reload whenever the workspace changes.
@@ -309,155 +261,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setIcps((list) => list.map((icp) => (icp.id === id ? next : icp)))
   }
 
-  const addLeads: Store["addLeads"] = (newLeads) => setLeads((list) => [...list, ...newLeads])
+  const addLead: Store["addLead"] = async (input) => {
+    const lead = await api.addLeadApi(currentWorkspaceId, input)
+    setLeads((list) => [lead, ...list])
+    return lead
+  }
 
-  const moveLeads: Store["moveLeads"] = (ids, icpId) =>
+  const moveLeads: Store["moveLeads"] = async (ids, icpId) => {
+    await api.moveLeadsApi(currentWorkspaceId, ids, icpId)
     setLeads((list) => list.map((l) => (ids.includes(l.id) ? { ...l, icpId } : l)))
+  }
 
-  const deleteLeads: Store["deleteLeads"] = (ids) => {
+  const deleteLeads: Store["deleteLeads"] = async (ids) => {
+    await api.deleteLeadsApi(currentWorkspaceId, ids)
     setLeads((list) => list.filter((l) => !ids.includes(l.id)))
-    setItems((list) => list.filter((it) => !ids.includes(it.leadId)))
-    setGenerations((list) => list.filter((g) => !ids.includes(g.leadId)))
-  }
-
-  const startEnrichment: Store["startEnrichment"] = async (icpId, leadIds) => {
-    const icp = icps.find((i) => i.id === icpId)
-    if (!icp || leadIds.length === 0) return
-    const targets = leads.filter((l) => leadIds.includes(l.id))
-    setLeads((list) => list.map((l) => (leadIds.includes(l.id) ? { ...l, status: "enriching" } : l)))
-    setItems((list) => list.filter((it) => !leadIds.includes(it.leadId)))
-    setEnrichJobs((jobs) => ({
-      ...jobs,
-      [icpId]: {
-        icpId,
-        total: targets.length,
-        completed: 0,
-        bySource: emptyProgress(),
-        outcomes: { enriched: 0, no_content: 0, failed: 0 },
-        costUsd: 0,
-        running: true,
-      },
-    }))
-
-    await runEnrichment(targets, icp, settings, (result) => {
-      setLeads((list) => list.map((l) => (l.id === result.leadId ? { ...l, status: result.status } : l)))
-      setItems((list) => [...list, ...result.items])
-      addSpend(result.costUsd)
-      setEnrichJobs((jobs) => {
-        const job = jobs[icpId]
-        if (!job) return jobs
-        const bySource = { ...job.bySource }
-        for (const [source, outcome] of Object.entries(result.sourceOutcomes) as [Source, string][]) {
-          const p = { ...bySource[source] }
-          p.done++
-          if (outcome === "found") p.found++
-          else if (outcome === "empty") p.empty++
-          else p.failed++
-          bySource[source] = p
-        }
-        return {
-          ...jobs,
-          [icpId]: {
-            ...job,
-            completed: job.completed + 1,
-            bySource,
-            outcomes: { ...job.outcomes, [result.status]: job.outcomes[result.status] + 1 },
-            costUsd: job.costUsd + result.costUsd,
-          },
-        }
-      })
-    })
-
-    setEnrichJobs((jobs) => (jobs[icpId] ? { ...jobs, [icpId]: { ...jobs[icpId], running: false } } : jobs))
-    toast.success(`Enrichment finished for ${targets.length} lead${targets.length === 1 ? "" : "s"}`)
-  }
-
-  const dismissEnrichJob: Store["dismissEnrichJob"] = (icpId) =>
-    setEnrichJobs((jobs) => {
-      const next = { ...jobs }
-      delete next[icpId]
-      return next
-    })
-
-  const startGeneration: Store["startGeneration"] = async (icpId, leadIds, opts = {}) => {
-    const icp = icps.find((i) => i.id === icpId)
-    const hookVersion = icp && currentVersion(versions, resolveTemplate(templates, icp, "hook"))
-    const emailVersion = icp && currentVersion(versions, resolveTemplate(templates, icp, "email"))
-    const scoreVersion = currentVersion(versions, resolveScoringTemplate(templates, settings.scoring))
-    if (!icp || !hookVersion || !emailVersion || !scoreVersion || leadIds.length === 0) return
-    const targets = leads.filter((l) => leadIds.includes(l.id))
-    setGenJobs((jobs) => ({
-      ...jobs,
-      [icpId]: { icpId, total: targets.length, completed: 0, costUsd: 0, running: true },
-    }))
-    let sentToday = autoSentToday(generations)
-    let autoSent = 0
-
-    await runGeneration(
-      { icp, leads: targets, items, hookVersion, emailVersion, scoreVersion, instruction: opts.instruction, excludeItemIds: opts.excludeItemIds },
-      (g, score) => {
-        // Regenerating from the review panel never auto-sends: a person is already looking at it.
-        const decision = opts.instruction || opts.excludeItemIds || opts.reviewOnly
-          ? { send: false }
-          : sendDecision(score.value, g.flags, settings.scoring, sentToday)
-        const final: Generation = decision.send ? { ...g, status: "sent", sentAt: new Date().toISOString(), sentBy: "auto" } : g
-        if (decision.send) {
-          sentToday++
-          autoSent++
-        }
-        setGenerations((list) => [...list.filter((x) => x.leadId !== g.leadId), final])
-        setLeads((list) =>
-          list.map((l) => (l.id === g.leadId ? { ...l, score, status: decision.send ? "sent" : "generated" } : l)),
-        )
-        const cost = g.costUsd + COST_PER_SCORE
-        addSpend(cost)
-        setGenJobs((jobs) => {
-          const job = jobs[icpId]
-          return job ? { ...jobs, [icpId]: { ...job, completed: job.completed + 1, costUsd: job.costUsd + cost } } : jobs
-        })
-      },
-    )
-
-    setGenJobs((jobs) => (jobs[icpId] ? { ...jobs, [icpId]: { ...jobs[icpId], running: false } } : jobs))
-    const n = targets.length
-    toast.success(
-      autoSent
-        ? `Generated ${n} email${n === 1 ? "" : "s"}: ${autoSent} sent automatically, ${n - autoSent} waiting for review`
-        : `Generated and scored ${n} email${n === 1 ? "" : "s"}, ready for review`,
-    )
-  }
-
-  const updateGeneration: Store["updateGeneration"] = (id, patch) => {
-    const gen = generations.find((g) => g.id === id)
-    setGenerations((list) => list.map((g) => (g.id === id ? { ...g, ...patch } : g)))
-    if (gen && patch.status)
-      setLeads((list) => list.map((l) => (l.id === gen.leadId ? { ...l, status: LEAD_STATUS_FOR[patch.status!] } : l)))
-  }
-
-  const setGenerationStatus: Store["setGenerationStatus"] = (ids, status) => {
-    const leadIds = generations.filter((g) => ids.includes(g.id)).map((g) => g.leadId)
-    setGenerations((list) => list.map((g) => (ids.includes(g.id) ? { ...g, status } : g)))
-    setLeads((list) => list.map((l) => (leadIds.includes(l.id) ? { ...l, status: LEAD_STATUS_FOR[status] } : l)))
-  }
-
-  const sendGenerations: Store["sendGenerations"] = (ids) => {
-    const now = new Date().toISOString()
-    const leadIds = generations.filter((g) => ids.includes(g.id)).map((g) => g.leadId)
-    setGenerations((list) =>
-      list.map((g) => (ids.includes(g.id) ? { ...g, status: "sent", sentAt: now, sentBy: "manual" } : g)),
-    )
-    setLeads((list) => list.map((l) => (leadIds.includes(l.id) ? { ...l, status: "sent" } : l)))
-  }
-
-  const rescoreLead: Store["rescoreLead"] = async (leadId) => {
-    const lead = leads.find((l) => l.id === leadId)
-    const icp = lead && icps.find((i) => i.id === lead.icpId)
-    const generation = generationByLead(generations).get(leadId)
-    const scoreVersion = currentVersion(versions, resolveScoringTemplate(templates, settings.scoring))
-    if (!lead || !icp || !generation || !scoreVersion) return
-    const score = await runScoring(icp, lead, generation, items, scoreVersion)
-    setLeads((list) => list.map((l) => (l.id === leadId ? { ...l, score } : l)))
-    addSpend(COST_PER_SCORE)
   }
 
   const saveVersion: Store["saveVersion"] = async (templateId, draft, note) => {
@@ -564,31 +381,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       value={{
         icps,
         leads,
-        setLeads,
-        items,
-        generations,
+        leadsStatus,
+        leadsError,
+        reloadLeads,
         templates,
         versions,
         settings,
         setSettings,
-        enrichJobs,
-        genJobs,
         icpsStatus,
         icpsError,
         reloadIcps,
         updateIcp,
         updateIcpDefinition,
         createIcp,
-        addLeads,
+        addLead,
         moveLeads,
         deleteLeads,
-        startEnrichment,
-        dismissEnrichJob,
-        startGeneration,
-        updateGeneration,
-        setGenerationStatus,
-        sendGenerations,
-        rescoreLead,
         promptsStatus,
         promptsError,
         reloadPrompts,
@@ -603,7 +411,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         workspacesStatus,
         workspacesError,
         reloadWorkspaces,
-        currentUserId: mock.CURRENT_USER_ID,
+        currentUserId: CURRENT_USER_ID,
         currentWorkspaceId,
         setCurrentWorkspace,
         inviteUser,

@@ -5,13 +5,12 @@ import { Search, Sparkles, Users, Wand2 } from "lucide-react"
 import { AddLeadsMenu } from "@/components/add-leads"
 import { EmptyState } from "@/components/empty-state"
 import { LeadsTable } from "@/components/leads-table"
-import { EnrichDialog, EnrichmentProgress, GenerateDialog, GenerationProgress } from "@/components/run-dialogs"
+import { EnrichDialog, GenerateDialog } from "@/components/run-dialogs"
 import { TableSkeleton } from "@/components/table-skeleton"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useIcpParam } from "@/hooks/use-icp"
-import { useMockLoading } from "@/hooks/use-mock-loading"
 import { LEAD_STATUS_LABEL, fullName } from "@/lib/format"
 import { ENRICHABLE, GENERATABLE } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
@@ -19,8 +18,8 @@ import { LEAD_STATUSES } from "@/lib/types"
 
 export default function IcpLeadsPage() {
   const icp = useIcpParam()
-  const { leads, enrichJobs, genJobs } = useStore()
-  const loading = useMockLoading()
+  const { leads, leadsStatus } = useStore()
+  const loading = leadsStatus === "loading"
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState("")
   const [status, setStatus] = useState("all")
@@ -36,10 +35,9 @@ export default function IcpLeadsPage() {
       (!q || `${fullName(l)} ${l.email} ${l.company}`.toLowerCase().includes(q)),
   )
   const selectedLeads = icpLeads.filter((l) => selected.has(l.id))
-  const busy = enrichJobs[icp.id]?.running || genJobs[icp.id]?.running
 
   const enrichAll = icpLeads.filter((l) => ENRICHABLE.includes(l.status)).map((l) => l.id)
-  const enrichSelected = selectedLeads.filter((l) => l.status !== "enriching").map((l) => l.id)
+  const enrichSelected = selectedLeads.map((l) => l.id)
   const generateTargets = (selected.size ? selectedLeads : icpLeads.filter((l) => l.status === "enriched" || l.status === "no_content"))
     .filter((l) => GENERATABLE.includes(l.status))
     .map((l) => l.id)
@@ -72,20 +70,17 @@ export default function IcpLeadsPage() {
         </Select>
         <div className="ml-auto flex flex-wrap gap-2">
           <AddLeadsMenu icpId={icp.id} />
-          <Button variant="outline" disabled={busy || enrichSelected.length === 0} onClick={() => setEnrichIds(enrichSelected)}>
-            <Sparkles /> Enrich selected{enrichSelected.length ? ` (${enrichSelected.length})` : ""}
+          <Button variant="outline" disabled={enrichSelected.length === 0} onClick={() => setEnrichIds(enrichSelected)}>
+            <Sparkles /> Fetch posts{enrichSelected.length ? ` (${enrichSelected.length})` : ""}
           </Button>
-          <Button variant="outline" disabled={busy || enrichAll.length === 0} onClick={() => setEnrichIds(enrichAll)}>
-            Enrich all ({enrichAll.length})
+          <Button variant="outline" disabled={enrichAll.length === 0} onClick={() => setEnrichIds(enrichAll)}>
+            Fetch posts for all new ({enrichAll.length})
           </Button>
-          <Button disabled={busy || generateTargets.length === 0} onClick={() => setGenerateIds(generateTargets)}>
-            <Wand2 /> Generate ({generateTargets.length})
+          <Button disabled={generateTargets.length === 0} onClick={() => setGenerateIds(generateTargets)}>
+            <Wand2 /> Write emails ({generateTargets.length})
           </Button>
         </div>
       </div>
-
-      <EnrichmentProgress icpId={icp.id} />
-      <GenerationProgress icpId={icp.id} />
 
       {loading ? (
         <TableSkeleton />
@@ -93,7 +88,7 @@ export default function IcpLeadsPage() {
         <EmptyState
           icon={Users}
           title="No leads in this ICP"
-          description="Import a CSV or add leads one by one. Nothing is spent until you enrich, and every run shows its cost first."
+          description="Add people as leads on the People page, import a CSV, or add them one by one. Nothing is spent until you fetch posts or write emails."
           action={<AddLeadsMenu icpId={icp.id} variant="default" />}
         />
       ) : visible.length === 0 ? (

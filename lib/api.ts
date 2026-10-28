@@ -1,10 +1,9 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import type { Company, ICP, IcpOutreach, PromptKind, PromptTemplate, PromptVersion, Source, Workspace } from "./types"
+import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Source, Workspace } from "./types"
 
-// The backend. Pages that use it fetch on mount and show their own loading and error states;
-// everything else in the app still runs on sample data from lib/mock-data.ts.
+// The backend. Pages fetch on mount and show their own loading and error states.
 
 export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "")
 
@@ -271,7 +270,10 @@ export interface ApiPost {
 export const fetchPosts = (workspaceId: string, leadId?: string) =>
   api<ApiPost[]>(leadId ? `/posts?leadId=${leadId}` : "/posts", { workspaceId })
 
-export const fetchLeadPosts = (workspaceId: string, body: { leadIds: string[]; maxPosts: number; maxAgeDays: number }) =>
+export const fetchLeadPosts = (
+  workspaceId: string,
+  body: { leadIds: string[]; maxPosts: number; maxAgeDays: number; sources?: ("linkedin" | "instagram")[] },
+) =>
   api<{
     results: { leadId: string; linkedin: number | null; instagram: number | null; new: number }[]
     costUsd: number | null
@@ -665,3 +667,94 @@ export const deleteExample = (workspaceId: string, id: string) =>
 /** Copy a generated email (with edits) into the library, for its lead's ICP. */
 export const saveEmailAsExample = (workspaceId: string, emailId: string, note = "") =>
   api<ExampleEmail>(`/examples/from-email/${emailId}`, { workspaceId, method: "POST", body: { note } })
+
+// ---------- Leads ----------
+
+interface ApiLead {
+  id: string
+  icpId: string | null
+  firstName: string
+  lastName: string
+  email: string | null
+  emailStatus: string | null
+  title: string
+  company: string
+  website: string
+  linkedinUrl: string | null
+  instagramUrl: string | null
+  facebookUrl: string | null
+  extra: Record<string, string>
+  status: LeadStatus
+  score: number | null
+  scoreReasons: string[] | null
+  postCount: number
+  createdAt: string
+}
+
+function toLead(l: ApiLead): Lead {
+  return {
+    id: l.id,
+    icpId: l.icpId ?? "",
+    firstName: l.firstName,
+    lastName: l.lastName,
+    email: l.email ?? "",
+    emailStatus: l.emailStatus,
+    company: l.company,
+    title: l.title,
+    website: l.website,
+    linkedinUrl: l.linkedinUrl ?? "",
+    instagramUrl: l.instagramUrl ?? "",
+    facebookUrl: l.facebookUrl ?? "",
+    extra: l.extra,
+    status: l.status,
+    score: l.score === null ? null : { value: l.score, reasons: l.scoreReasons ?? [] },
+    postCount: l.postCount,
+    createdAt: l.createdAt,
+  }
+}
+
+export const fetchLeads = async (workspaceId: string) => (await apiAll<ApiLead>("/leads", workspaceId)).map(toLead)
+
+export interface LeadInput {
+  icpId: string
+  firstName: string
+  lastName: string
+  email: string
+  company: string
+  title: string
+  website: string
+  linkedinUrl: string
+  instagramUrl: string
+  facebookUrl: string
+  /** Custom fields, usable in prompts as {{lead.extra.name}}. */
+  extra: Record<string, string>
+}
+
+/** Add one lead. 409 when the workspace already has them (same email or LinkedIn). */
+export const addLeadApi = async (workspaceId: string, lead: LeadInput) =>
+  toLead(await api<ApiLead>("/leads", { workspaceId, method: "POST", body: lead }))
+
+export const deleteLeadsApi = (workspaceId: string, leadIds: string[]) =>
+  api<{ changed: number }>("/leads/delete", { workspaceId, method: "POST", body: { leadIds } })
+
+export const moveLeadsApi = (workspaceId: string, leadIds: string[], icpId: string) =>
+  api<{ changed: number }>("/leads/move", { workspaceId, method: "POST", body: { leadIds, icpId } })
+
+export const LEADS_TEMPLATE_URL = `${API_URL}/api/v1/leads/template.csv`
+
+export interface LeadImportResult {
+  dryRun: boolean
+  totalRows: number
+  imported: number
+  duplicatesInFile: number
+  duplicatesExisting: number
+  invalid: number
+  websitesFromEmail: number
+  /** Each CSV column and the lead field it fills, or null when it's kept as an extra field. */
+  columns: { column: string; field: string | null }[]
+  rows: { row: number; outcome: "imported" | "duplicate" | "invalid"; reason: string | null }[]
+}
+
+/** Import a CSV into an ICP. With dryRun, nothing is saved: the result previews each row's outcome. */
+export const importLeadsCsv = (workspaceId: string, icpId: string, csv: string, dryRun: boolean) =>
+  api<LeadImportResult>(`/leads/import?icpId=${icpId}&dryRun=${dryRun}`, { workspaceId, method: "POST", csv })

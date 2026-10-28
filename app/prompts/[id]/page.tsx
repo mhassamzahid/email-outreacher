@@ -8,7 +8,6 @@ import { toast } from "sonner"
 import { PageHeader } from "@/components/page-header"
 import { OutputSchemaView } from "@/components/prompt/output-schema"
 import { PromptBody } from "@/components/prompt/prompt-body"
-import { TestPanel } from "@/components/prompt/test-panel"
 import { VersionHistory } from "@/components/prompt/version-history"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,7 +33,7 @@ export default function PromptEditorPage() {
   const template = templates.find((t) => t.id === id)
   const version = versions.find((v) => v.id === template?.currentVersionId)
   // Lives outside Editor so the open tab survives the remount after saving or restoring a version.
-  const [tab, setTab] = useState("test")
+  const [tab, setTab] = useState("history")
 
   // Prompts load from the backend; only call it missing once they have.
   if (promptsStatus === "loading")
@@ -166,13 +165,9 @@ function Editor({
 
         <Tabs value={tab} onValueChange={onTabChange}>
           <TabsList>
-            <TabsTrigger value="test">Test</TabsTrigger>
             <TabsTrigger value="history">Version history</TabsTrigger>
             <TabsTrigger value="output">Output schema</TabsTrigger>
           </TabsList>
-          <TabsContent value="test" className="pt-2">
-            <TestPanel template={template} draft={draft} />
-          </TabsContent>
           <TabsContent value="history" className="pt-2">
             <VersionHistory template={template} onRestored={() => undefined} />
           </TabsContent>
