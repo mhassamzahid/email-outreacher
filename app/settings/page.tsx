@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { AutoSendSettings } from "@/components/auto-send-settings"
 import { FeedbackSettings } from "@/components/feedback/feedback-settings"
+import { ResearchSettings } from "@/components/settings/research-settings"
 import { PageHeader } from "@/components/page-header"
 import { ScoringPromptEditor } from "@/components/prompt/scoring-prompt-editor"
 import { Pill } from "@/components/status"
@@ -130,6 +131,13 @@ export default function SettingsPage() {
             description="Claude doesn't retrain on your ratings. Each new email is written with the ICP's latest rated emails in its prompt; these set how many."
           >
             <FeedbackSettings />
+          </Panel>
+          <Panel
+            id="research"
+            title="Website reading"
+            description="When you research a company, Claude reads its website one page at a time and decides after each page whether it needs another. These cap how far it goes."
+          >
+            <ResearchSettings />
           </Panel>
         </div>
 

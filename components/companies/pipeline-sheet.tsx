@@ -156,6 +156,26 @@ export function PipelineSheet({
                 ))}
               </ul>
             )}
+            {score.reading && (
+              <div className="space-y-1 pt-1">
+                <p className="text-xs text-muted-foreground">
+                  {score.reading.length
+                    ? `Read the homepage, then chose ${score.reading.length} more ${score.reading.length === 1 ? "page" : "pages"}:`
+                    : "The homepage was enough to decide."}
+                </p>
+                {score.reading.length > 0 && (
+                  <ol className="list-decimal space-y-0.5 pl-5 text-[13px]">
+                    {score.reading.map((r) => (
+                      <li key={r.url}>
+                        <span className="break-all">{r.url.replace(/^https?:\/\/[^/]+/, "") || "/"}</span>
+                        {r.reason && <span className="text-muted-foreground"> · {r.reason}</span>}
+                        {!r.read && <span className="text-warning"> · couldn&apos;t be read</span>}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+            )}
           </Section>
         )}
 

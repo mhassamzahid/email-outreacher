@@ -31,30 +31,30 @@ const HOOK_VARS = ["hook.text", "hook.summary", "hook.post", "hook.source", "hoo
 
 const EMAIL_VARS = ["email.subject", "email.body"]
 
-/** Company Verification prompts are filled by the backend from a researched company. */
-const VERIFY_VARS = [
-  "icp.name",
-  "icp.industry",
-  "icp.places",
-  "icp.description",
-  "icp.pains",
-  "icp.offer",
-  "icp.rules",
+/**
+ * What we know about the lead's company, filled by the backend: our research for Apollo companies,
+ * Lead Intel's stored data for Lead Intel ones. company.summary is Company Verification's verdict.
+ */
+const COMPANY_VARS = [
   "company.name",
   "company.domain",
   "company.location",
   "company.socials",
-  "company.apollo",
-  "company.instagram",
   "company.website",
+  "company.instagram",
+  "company.apollo",
 ]
+
+/** Company Verification prompts are filled by the backend from a researched company. */
+const VERIFY_VARS = ["icp.name", "icp.industry", "icp.places", "icp.description", "icp.pains", "icp.offer", "icp.rules", ...COMPANY_VARS]
 
 /** Variables offered in the editor sidebar for each prompt kind. `lead.extra.*` is matched by prefix. */
 export function availableVariables(kind: PromptKind): string[] {
   if (kind === "verify") return VERIFY_VARS
-  if (kind === "hook") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items"]
+  if (kind === "hook") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...COMPANY_VARS, "company.summary"]
   // Email prompts can also see every post ({{items}}), not just the chosen one ({{hook.post}}).
-  if (kind === "email") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS]
+  if (kind === "email")
+    return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...COMPANY_VARS, "company.summary"]
   return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...EMAIL_VARS]
 }
 

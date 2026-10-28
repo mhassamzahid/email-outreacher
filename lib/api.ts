@@ -294,7 +294,15 @@ export interface PipelineCompany {
   ruleFit: boolean | null
   ruleDetail: { reason: string; hits: { term: string; source: string; group: string }[]; skipped: string[] } | null
   score: number | null
-  scoreDetail: { summary: string; reasons: string[]; concerns: string[]; model: string; error: string | null } | null
+  scoreDetail: {
+    summary: string
+    reasons: string[]
+    concerns: string[]
+    model: string
+    error: string | null
+    /** Pages Claude asked to read after the homepage, in order, and why. */
+    reading?: { url: string; reason: string; read: boolean }[]
+  } | null
   research: {
     website: { outcome: string; via: string | null; url: string | null; title: string; text: string; detail: string | null } | null
     socials: Record<string, string>
@@ -512,3 +520,15 @@ export const fetchFeedbackSettings = (workspaceId: string) => api<FeedbackSettin
 
 export const saveFeedbackSettings = (workspaceId: string, body: FeedbackSettings) =>
   api<FeedbackSettings>("/settings/feedback", { workspaceId, method: "PUT", body })
+
+// ---------- Settings: how much of a company's website research reads ----------
+
+export interface ResearchSettings {
+  researchMaxPages: number
+  researchMaxSeconds: number
+}
+
+export const fetchResearchSettings = (workspaceId: string) => api<ResearchSettings>("/settings/research", { workspaceId })
+
+export const saveResearchSettings = (workspaceId: string, body: ResearchSettings) =>
+  api<ResearchSettings>("/settings/research", { workspaceId, method: "PUT", body })
