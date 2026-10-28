@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { Mail, Plus, Trash2 } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
@@ -160,13 +160,15 @@ function ExampleSheet({
   const [touched, setTouched] = useState(false)
   const [busy, setBusy] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const subjectRef = useRef<HTMLInputElement>(null)
   const errors = {
     body: !draft.body.trim() ? "Write or paste the email" : "",
     icps: !draft.allIcps && draft.icpIds.length === 0 ? "Pick the ICPs it's for, or all ICPs" : "",
   }
   const shown = touched ? errors : { body: "", icps: "" }
 
-  const save = async () => {
+  /** Save; with `addAnother`, keep the panel open with an empty form (same ICPs) for the next example. */
+  const save = async (addAnother = false) => {
     setTouched(true)
     if (errors.body || errors.icps) return
     setBusy(true)
@@ -175,7 +177,13 @@ function ExampleSheet({
       else await createExample(wsId, draft)
       toast.success(example ? "Example saved" : "Example added")
       onSaved()
-      onClose()
+      if (addAnother) {
+        setDraft((d) => ({ ...EMPTY, allIcps: d.allIcps, icpIds: d.icpIds }))
+        setTouched(false)
+        subjectRef.current?.focus()
+      } else {
+        onClose()
+      }
     } catch (e) {
       toast.error("Couldn't save it", { description: e instanceof Error ? e.message : undefined })
     } finally {
@@ -220,7 +228,12 @@ function ExampleSheet({
         >
           <div className="space-y-1.5">
             <Label htmlFor="example-subject">Subject</Label>
-            <Input id="example-subject" value={draft.subject} onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))} />
+            <Input
+              id="example-subject"
+              ref={subjectRef}
+              value={draft.subject}
+              onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+            />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="example-body">Email</Label>
@@ -277,8 +290,13 @@ function ExampleSheet({
           )}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose} disabled={busy}>
-              Cancel
+              {example ? "Cancel" : "Done"}
             </Button>
+            {!example && (
+              <Button variant="outline" disabled={busy} onClick={() => void save(true)}>
+                Save and add another
+              </Button>
+            )}
             <Button type="submit" form="example-form" disabled={busy}>
               {busy ? "Saving…" : example ? "Save" : "Add example"}
             </Button>
