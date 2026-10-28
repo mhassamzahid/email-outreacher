@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ExternalLink, FileUp, MailCheck, Newspaper, Search, Sparkles, UserPlus, UserSearch } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
@@ -74,6 +74,12 @@ export function PeopleView() {
 function PeopleList({ wsId }: { wsId: string }) {
   const router = useRouter()
   const people = useApi(() => fetchAllStakeholders(wsId), [wsId])
+  // Adding, importing and revealing people can make leads, and fetching changes post counts, so the
+  // shared leads list reloads whenever this list does.
+  const { reloadLeads } = useStore()
+  useEffect(() => {
+    if (people.data) reloadLeads()
+  }, [people.data, reloadLeads])
   const icps = useApi(() => fetchIcps(wsId), [wsId])
   // Names of the pipeline companies people were found at; the rest carry their employer's name as found.
   const companies = useApi(() => fetchPipeline(wsId), [wsId])

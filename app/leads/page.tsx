@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { ArrowRightLeft, Search, Trash2, Users } from "lucide-react"
 import { toast } from "sonner"
 import { AddLeadsMenu } from "@/components/add-leads"
@@ -29,6 +29,8 @@ import { LEAD_STATUSES, SOURCES } from "@/lib/types"
 export default function LeadsPage() {
   const { leads, leadsStatus, leadsError, reloadLeads, icps, moveLeads, deleteLeads } = useStore()
   const loading = leadsStatus === "loading"
+  // Leads are also made on the People and Companies pages, so fetch a fresh list on every visit.
+  useEffect(() => reloadLeads(), [reloadLeads])
   const [busy, setBusy] = useState(false)
   const [query, setQuery] = useState("")
   const [icpFilter, setIcpFilter] = useState("all")

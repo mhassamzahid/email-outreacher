@@ -25,8 +25,8 @@ const SENIORITIES: { value: string; label: string }[] = [
 ]
 
 const SOURCES = [
-  { value: "apollo", label: "Apollo", hint: "Free search. Emails revealed later, about 1 credit each." },
-  { value: "linkedin", label: "LinkedIn (Apify)", hint: "Full names and LinkedIn, no emails. About $0.004 per person." },
+  { value: "apollo", label: "Apollo", hint: "Needs a paid Apollo plan. Searching uses no credits; revealing an email is about 1 credit." },
+  { value: "linkedin", label: "LinkedIn (Apify)", hint: "Full names and LinkedIn, no emails. About $0.003 per person (Basic profiles)." },
 ] as const
 
 const DEFAULT_TITLES = ["Owner", "Founder", "CEO", "President", "General Manager"]
@@ -36,7 +36,7 @@ const LINKEDIN_COST_PER_PERSON = 0.004
 
 type Result = StakeholderSearchResult & { costUsd?: number | null }
 
-/** Find the people at these qualified companies: in Apollo (free search) or on LinkedIn through Apify (paid). */
+/** Find the people at these qualified companies: in Apollo (paid plans only) or on LinkedIn through Apify (paid per person). */
 export function FindStakeholdersDialog({
   workspaceId,
   companies,
@@ -96,7 +96,7 @@ export function FindStakeholdersDialog({
           <DialogDescription>
             {linkedin
               ? "Finds people on LinkedIn through Apify, looking each company up by name. Paid per person found."
-              : "Searches Apollo by each company's website domain. Searching is free; only revealing an email uses credits. Only qualified companies are searched."}
+              : "Searches Apollo by each company's website domain. Needs a paid Apollo plan; searching uses no credits, revealing an email does. Only qualified companies are searched."}
           </DialogDescription>
         </DialogHeader>
 

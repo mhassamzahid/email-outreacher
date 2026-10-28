@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Search, Sparkles, Users, Wand2 } from "lucide-react"
 import { AddLeadsMenu } from "@/components/add-leads"
 import { EmptyState } from "@/components/empty-state"
@@ -18,7 +18,9 @@ import { LEAD_STATUSES } from "@/lib/types"
 
 export default function IcpLeadsPage() {
   const icp = useIcpParam()
-  const { leads, leadsStatus } = useStore()
+  const { leads, leadsStatus, reloadLeads } = useStore()
+  // Leads are also made on the People and Companies pages, so fetch a fresh list on every visit.
+  useEffect(() => reloadLeads(), [reloadLeads])
   const loading = leadsStatus === "loading"
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState("")
