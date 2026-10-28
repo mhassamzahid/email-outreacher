@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { ExternalLink, MessageSquareText, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react"
+import { ExternalLink, Mail, MessageSquareText, Sparkles, ThumbsDown, ThumbsUp } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
 import { EmptyState } from "@/components/empty-state"
@@ -21,6 +22,7 @@ import {
   fetchEmails,
   fetchIcps,
   rateEmail,
+  saveEmailAsExample,
   suggestEmailPrompt,
   useApi,
 } from "@/lib/api"
@@ -53,6 +55,7 @@ export function FeedbackView() {
 }
 
 function Feedback({ wsId }: { wsId: string }) {
+  const router = useRouter()
   const emails = useApi(() => fetchEmails(wsId), [wsId])
   const icps = useApi(() => fetchIcps(wsId), [wsId])
   const [icpId, setIcpId] = useState("all")
@@ -70,6 +73,21 @@ function Feedback({ wsId }: { wsId: string }) {
   const open = emails.data.find((d) => d.id === openId) ?? null
   const activeIcp = icps.data?.find((i) => i.id === icpId)
   const ratedForIcp = forIcp.filter((d) => d.feedback).length
+
+  const saveAsExample = async (d: EmailDraft) => {
+    setBusy(`example-${d.id}`)
+    try {
+      await saveEmailAsExample(wsId, d.id)
+      toast.success("Saved as an example email", {
+        description: "It's on the Example emails page, linked to this lead's ICP.",
+        action: { label: "Open", onClick: () => router.push("/examples") },
+      })
+    } catch (e) {
+      toast.error("Couldn't save it", { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setBusy("")
+    }
+  }
 
   // One-click rating from the list keeps any tags and note already given.
   const quickRate = async (d: EmailDraft, rating: "good" | "bad") => {
@@ -238,6 +256,22 @@ function Feedback({ wsId }: { wsId: string }) {
             <section className="space-y-2 border-t border-rule px-5 py-4">
               <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Your feedback</h3>
               <FeedbackControl key={open.id + (open.feedback?.updatedAt ?? "")} workspaceId={wsId} draft={open} onSaved={() => emails.reload()} />
+            </section>
+            <section className="space-y-2 border-t border-rule px-5 py-4">
+              <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Example emails</h3>
+              <p className="text-xs text-muted-foreground">
+                Copy this email{open.edited ? ", with your edits," : ""} into the example library for its ICP. Claude writes like it from
+                then on.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={!open.lead.icpId || busy === `example-${open.id}`}
+                title={!open.lead.icpId ? "This lead has no ICP to link the example to" : undefined}
+                onClick={() => void saveAsExample(open)}
+              >
+                <Mail /> {busy === `example-${open.id}` ? "Saving…" : "Save as example"}
+              </Button>
             </section>
           </SheetContent>
         </Sheet>

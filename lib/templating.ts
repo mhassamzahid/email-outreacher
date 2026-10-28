@@ -14,7 +14,6 @@ const ICP_VARS = [
   "icp.proof",
   "icp.cta",
   "icp.tone",
-  "icp.exampleEmail",
   "icp.wordsToAvoid",
   "icp.hookGuidance",
 ]
@@ -42,7 +41,14 @@ const POST_VARS = ["items", "posts.linkedin", "posts.instagram"]
 const HOOK_VARS = ["hooks", "hook.text", "hook.summary", "hook.post", "hook.source", "hook.url", "hook.date"]
 
 /** Emails rated on the Feedback page for the same ICP. */
-const EXAMPLE_VARS = ["examples.good", "examples.bad"]
+/** Example emails from the library for the lead's ICP, then emails rated on the Feedback page. */
+const EXAMPLE_VARS = ["examples.samples", "examples.good", "examples.bad"]
+
+/** Old names that still work in saved prompts but aren't offered any more. */
+const ALIASES: Partial<Record<PromptKind, string[]>> = {
+  email: ["icp.exampleEmail"],
+  score: ["icp.exampleEmail"],
+}
 
 const EMAIL_VARS = ["email.subject", "email.body"]
 
@@ -97,7 +103,7 @@ export function availableVariables(kind: PromptKind): string[] {
 
 export function isKnownVariable(name: string, kind: PromptKind): boolean {
   if (kind !== "verify" && name.startsWith("lead.extra.") && name.length > "lead.extra.".length) return true
-  return availableVariables(kind).includes(name)
+  return availableVariables(kind).includes(name) || (ALIASES[kind] ?? []).includes(name)
 }
 
 export function extractVariables(template: string): string[] {
@@ -147,7 +153,6 @@ export function buildVariables(ctx: RenderContext): Record<string, string> {
     "icp.proof": icp.proof,
     "icp.cta": icp.cta,
     "icp.tone": icp.tone,
-    "icp.exampleEmail": icp.exampleEmail,
     "icp.wordsToAvoid": icp.wordsToAvoid,
     "icp.hookGuidance": icp.hookGuidance,
     "lead.firstName": lead.firstName,

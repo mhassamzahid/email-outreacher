@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Building2, Check, ChevronsUpDown, FileText, Gauge, MessageSquareText, Package, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, FileText, Gauge, Mail, MessageSquareText, Package, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -69,6 +69,7 @@ export function AppSidebar() {
     { href: "/people", label: "People", icon: UserSearch },
     { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
     { href: "/feedback", label: "Feedback", icon: MessageSquareText },
+    { href: "/examples", label: "Example emails", icon: Mail },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/prompts", label: "Prompts", icon: FileText },
     { href: "/usage", label: "Usage", icon: Gauge },

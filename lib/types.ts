@@ -52,7 +52,6 @@ export interface ICP {
   proof: string
   cta: string
   tone: string
-  exampleEmail: string
   wordsToAvoid: string
   hookGuidance: string
   enabledSources: Source[]
@@ -78,7 +77,6 @@ export type IcpOutreach = Pick<
   | "proof"
   | "cta"
   | "tone"
-  | "exampleEmail"
   | "wordsToAvoid"
   | "hookGuidance"
   | "enabledSources"

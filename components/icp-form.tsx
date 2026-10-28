@@ -30,7 +30,6 @@ export const toDraft = (icp: ICP): IcpDraft => ({
   proof: icp.proof,
   cta: icp.cta,
   tone: icp.tone,
-  exampleEmail: icp.exampleEmail,
   wordsToAvoid: icp.wordsToAvoid,
   hookGuidance: icp.hookGuidance,
   enabledSources: icp.enabledSources,
@@ -39,7 +38,7 @@ export const toDraft = (icp: ICP): IcpDraft => ({
 
 /** Messaging fields in the order the email prompt reads them, with how each one is used. */
 export const MESSAGING_FIELDS: {
-  key: "pains" | "offer" | "proof" | "cta" | "tone" | "wordsToAvoid" | "hookGuidance" | "exampleEmail"
+  key: "pains" | "offer" | "proof" | "cta" | "tone" | "wordsToAvoid" | "hookGuidance"
   label: string
   hint: string
   placeholder: string
@@ -98,14 +97,6 @@ export const MESSAGING_FIELDS: {
     hint: "What makes a good or bad opening for this audience. Read by the hook prompt.",
     placeholder: "Good: launches, hiring, posts about growth. Never: personal or sensitive posts.",
     rows: 2,
-    wide: true,
-  },
-  {
-    key: "exampleEmail",
-    label: "Example email",
-    hint: "One email in your voice. The model matches its length and tone, not its words.",
-    placeholder: "Hi Sam,\n\n…",
-    rows: 7,
     wide: true,
   },
 ]

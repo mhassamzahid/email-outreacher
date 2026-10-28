@@ -5,6 +5,13 @@ import { type FeedbackSettings as Counts, fetchFeedbackSettings, saveFeedbackSet
 
 const FIELDS: NumberField<keyof Counts>[] = [
   {
+    key: "sampleExamples",
+    label: "Example emails per email",
+    hint: "The newest emails from the Example emails page for the lead's ICP, shown to Claude as the voice to write in and scored against. 0 turns them off.",
+    min: 0,
+    max: 10,
+  },
+  {
     key: "goodExamples",
     label: "Good examples per email",
     hint: "The ICP's latest emails rated good, shown to Claude to write like. 0 turns them off.",

@@ -80,8 +80,8 @@ Call to action: {{product.cta}}
 Their pains: {{icp.pains}}
 Never use: {{icp.wordsToAvoid}}
 
-Sample email in our voice:
-{{icp.exampleEmail}}
+Example emails in our voice:
+{{examples.samples}}
 
 Emails the reviewer rated good:
 {{examples.good}}
@@ -103,8 +103,8 @@ The hook it opens with: {{hook.text}}
 The post it comes from:
 {{hook.post}}
 
-Sample email in our voice:
-{{icp.exampleEmail}}
+Example emails in our voice:
+{{examples.samples}}
 
 Emails the reviewer rated good:
 {{examples.good}}

@@ -117,7 +117,6 @@ const EMPTY_OUTREACH: IcpOutreach = {
   proof: "",
   cta: "",
   tone: "",
-  exampleEmail: "",
   wordsToAvoid: "",
   hookGuidance: "",
   enabledSources: ["linkedin", "website"],
@@ -144,7 +143,6 @@ export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: Ic
     proof: outreach.proof,
     cta: outreach.cta,
     tone: outreach.tone,
-    exampleEmail: outreach.exampleEmail,
     wordsToAvoid: outreach.wordsToAvoid,
     hookGuidance: outreach.hookGuidance,
     enabledSources: outreach.enabledSources,
@@ -526,6 +524,7 @@ export const suggestEmailPrompt = (workspaceId: string, icpId: string) =>
 // ---------- Settings: how many rated emails Claude learns from ----------
 
 export interface FeedbackSettings {
+  sampleExamples: number
   goodExamples: number
   badExamples: number
   improveExamples: number
@@ -632,3 +631,37 @@ export interface OutputSchema {
 }
 
 export const fetchOutputSchemas = () => api<Record<PromptKind, OutputSchema[]>>("/prompts/output-schemas")
+
+// ---------- Example emails: a library of emails in our voice, per ICP ----------
+
+export interface ExampleEmailFields {
+  subject: string
+  body: string
+  /** What makes it a good example. Shown to Claude next to it. */
+  note: string
+  allIcps: boolean
+  icpIds: string[]
+}
+
+export interface ExampleEmail extends ExampleEmailFields {
+  id: string
+  source: "manual" | "generated"
+  sourceEmailId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export const fetchExamples = (workspaceId: string) => api<ExampleEmail[]>("/examples", { workspaceId })
+
+export const createExample = (workspaceId: string, body: ExampleEmailFields) =>
+  api<ExampleEmail>("/examples", { workspaceId, method: "POST", body })
+
+export const updateExample = (workspaceId: string, id: string, body: ExampleEmailFields) =>
+  api<ExampleEmail>(`/examples/${id}`, { workspaceId, method: "PUT", body })
+
+export const deleteExample = (workspaceId: string, id: string) =>
+  api<void>(`/examples/${id}`, { workspaceId, method: "DELETE" })
+
+/** Copy a generated email (with edits) into the library, for its lead's ICP. */
+export const saveEmailAsExample = (workspaceId: string, emailId: string, note = "") =>
+  api<ExampleEmail>(`/examples/from-email/${emailId}`, { workspaceId, method: "POST", body: { note } })
