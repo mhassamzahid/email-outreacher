@@ -88,10 +88,6 @@ export function useApi<T>(load: () => Promise<T>, deps: unknown[]) {
 
 // ---------- Endpoints ----------
 
-export interface ApiCompany extends Company {
-  importedAt: string | null
-}
-
 /** This workspace's outreach settings for an ICP, as the backend stores them (eo_icp_profiles). */
 export interface ApiIcpProfile extends Omit<IcpOutreach, "hookPromptId" | "emailPromptId"> {
   hookPromptId: string | null
@@ -156,23 +152,13 @@ export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: Ic
 
 export const fetchIcps = (workspaceId?: string) => api<ApiIcp[]>("/icps", { workspaceId })
 
-export const fetchCompanies = (workspaceId: string, scope?: "inWorkspace") =>
-  apiAll<ApiCompany>(scope ? "/companies?inWorkspace=true" : "/companies", workspaceId)
+/** Every contactable company Lead Intel matched to an ICP (read-only). */
+export const fetchLeadIntelCompanies = (icpId: string) => apiAll<Company>(`/companies?icpId=${icpId}`)
 
 export async function fetchCompanyDetail(id: string): Promise<{ siteText: string | null }> {
   const d = await api<{ fields: Record<string, string | null> }>(`/companies/${id}`)
   return { siteText: d.fields.site_text ?? d.fields.website_text ?? null }
 }
-
-export const importCompanies = (workspaceId: string, companyIds: string[]) =>
-  api<{ imported: number; alreadyInWorkspace: number; notFound: string[] }>("/companies/import", {
-    workspaceId,
-    method: "POST",
-    body: { companyIds },
-  })
-
-export const removeCompanies = (workspaceId: string, companyIds: string[]) =>
-  api<{ removed: number }>("/companies/remove", { workspaceId, method: "POST", body: { companyIds } })
 
 export const fetchWorkspaces = () => api<Workspace[]>("/workspaces")
 
@@ -189,6 +175,8 @@ export const deleteWorkspace = (id: string) => api<void>(`/workspaces/${id}`, { 
 export interface Stakeholder {
   id: string
   companyId: string | null
+  /** The pipeline company they were found at. */
+  pipelineCompanyId: string | null
   /** The Lead Intel ICP whose search found them, if found by ICP. */
   icpId: string | null
   /** Their employer as Apollo names it. */
@@ -237,31 +225,8 @@ export interface StakeholderRevealResult {
 export const fetchStakeholders = (workspaceId: string, companyId?: string) =>
   api<Stakeholder[]>(companyId ? `/stakeholders?companyId=${companyId}` : "/stakeholders", { workspaceId })
 
-export const searchStakeholders = (
-  workspaceId: string,
-  body: { companyIds: string[]; titles: string[]; seniorities: string[] },
-) => api<StakeholderSearchResult>("/stakeholders/search", { workspaceId, method: "POST", body })
-
 export const revealStakeholders = (workspaceId: string, stakeholderIds: string[]) =>
   api<StakeholderRevealResult>("/stakeholders/reveal", { workspaceId, method: "POST", body: { stakeholderIds } })
-
-export interface IcpSearch {
-  icpId: string
-  titles: string[]
-  seniorities: string[]
-  locations: string[]
-  keywords: string
-  employeeRanges: string[]
-  verifiedEmailOnly: boolean
-  perPage: number
-  page: number
-}
-
-export const searchByIcp = (workspaceId: string, body: IcpSearch) =>
-  api<{ found: number; new: number; totalAtApollo: number | null; page: number; error: string | null }>(
-    "/stakeholders/search-icp",
-    { workspaceId, method: "POST", body },
-  )
 
 export const fetchAllStakeholders = (workspaceId: string) => api<Stakeholder[]>("/stakeholders", { workspaceId })
 
@@ -275,13 +240,6 @@ export type IcpCreate = Pick<
 export const createIcp = (body: IcpCreate) => api<ApiIcp>("/icps", { method: "POST", body })
 
 // ---------- LinkedIn people and posts (Apify) ----------
-
-export const searchLinkedIn = (workspaceId: string, body: { companyIds: string[]; titles: string[]; maxPerCompany: number }) =>
-  api<StakeholderSearchResult & { costUsd: number | null }>("/stakeholders/search-linkedin", {
-    workspaceId,
-    method: "POST",
-    body,
-  })
 
 export const addAsLeads = (workspaceId: string, stakeholderIds: string[]) =>
   api<{ added: number; linkedExisting: number; skipped: number }>("/stakeholders/add-as-leads", {
@@ -311,3 +269,111 @@ export const fetchLeadPosts = (workspaceId: string, body: { leadIds: string[]; m
     costUsd: number | null
     error: string | null
   }>("/posts/fetch", { workspaceId, method: "POST", body })
+
+// ---------- Company pipeline ----------
+
+export type PipelineStatus = "found" | "qualified" | "not_fit" | "error"
+
+export interface PipelineCompany {
+  id: string
+  icpId: string | null
+  source: "lead_intel" | "apollo"
+  leadIntelBusinessId: string | null
+  apolloOrgId: string | null
+  name: string
+  domain: string | null
+  websiteUrl: string | null
+  linkedinUrl: string | null
+  facebookUrl: string | null
+  twitterUrl: string | null
+  instagramUrl: string | null
+  city: string | null
+  state: string | null
+  status: PipelineStatus
+  statusReason: string | null
+  overridden: boolean
+  ruleFit: boolean | null
+  ruleDetail: { reason: string; hits: { term: string; source: string; group: string }[]; skipped: string[] } | null
+  score: number | null
+  scoreDetail: { summary: string; reasons: string[]; concerns: string[]; model: string; error: string | null } | null
+  research: {
+    website: { outcome: string; via: string | null; url: string | null; title: string; text: string; detail: string | null } | null
+    socials: Record<string, string>
+    instagram: { handle: string; name: string; bio: string; category: string | null; followers: number | null; private: boolean } | null
+  } | null
+  researchedAt: string | null
+  createdAt: string
+}
+
+export interface SourceFindResult {
+  found: number
+  added: number
+  duplicates: number
+  upgraded: number
+  totalAvailable: number | null
+  error: string | null
+}
+
+export const fetchPipeline = (workspaceId: string, icpId?: string) =>
+  api<PipelineCompany[]>(icpId ? `/pipeline/companies?icpId=${icpId}` : "/pipeline/companies", { workspaceId })
+
+export const findCompanies = (
+  workspaceId: string,
+  body: {
+    icpId: string
+    sources: ("lead_intel" | "apollo")[]
+    /** Only these of the ICP's Lead Intel companies; all of them when left out. */
+    leadIntelIds?: string[]
+    apollo?: { keywords: string[]; locations: string[]; employeeRanges: string[]; page: number; perPage: number }
+  },
+) => api<{ leadIntel: SourceFindResult | null; apollo: SourceFindResult | null }>("/pipeline/find", { workspaceId, method: "POST", body })
+
+export const researchCompanies = (workspaceId: string, companyIds: string[], force = false) =>
+  api<{ researched: number; skipped: number; qualified: number; notFit: number; errors: number; costUsd: number; notes: string[] }>(
+    "/pipeline/research",
+    { workspaceId, method: "POST", body: { companyIds, force } },
+  )
+
+export const setCompanyStatus = (workspaceId: string, companyId: string, status: "qualified" | "not_fit") =>
+  api<PipelineCompany>(`/pipeline/companies/${companyId}`, { workspaceId, method: "PATCH", body: { status } })
+
+export const findPipelineStakeholders = (
+  workspaceId: string,
+  body: { companyIds: string[]; source: "apollo" | "linkedin"; titles: string[]; seniorities: string[]; maxPerCompany: number },
+) => api<StakeholderSearchResult & { costUsd: number | null }>("/pipeline/stakeholders", { workspaceId, method: "POST", body })
+
+// ---------- Usage: what Claude, Apollo and Apify have cost ----------
+
+export type UsageProvider = "claude" | "apollo" | "apify"
+
+export interface UsageTotals {
+  calls: number
+  failed: number
+  credits: number
+  costUsd: number
+  inputTokens: number
+  outputTokens: number
+}
+
+export interface ProviderCall {
+  id: string
+  provider: string
+  endpoint: string | null
+  action: string | null
+  status: "succeeded" | "failed"
+  credits: number | null
+  costUsd: number
+  model: string | null
+  inputTokens: number | null
+  outputTokens: number | null
+  calledAt: string
+}
+
+export interface Usage {
+  since: string
+  providers: (UsageTotals & { provider: string })[]
+  actions: (UsageTotals & { provider: string; action: string })[]
+  recent: ProviderCall[]
+}
+
+export const fetchUsage = (workspaceId: string, days: number) => api<Usage>(`/usage?days=${days}`, { workspaceId })

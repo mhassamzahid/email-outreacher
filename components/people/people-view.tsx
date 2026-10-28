@@ -8,7 +8,6 @@ import { BackendError, WorkspaceGate } from "@/components/companies/backend-stat
 import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { PageHeader } from "@/components/page-header"
-import { IcpSearchDialog } from "@/components/people/icp-search-dialog"
 import { PostsSheet } from "@/components/people/posts-sheet"
 import { Pill, type PillTone } from "@/components/status"
 import { TableSkeleton } from "@/components/table-skeleton"
@@ -24,7 +23,7 @@ import {
   type Stakeholder,
   addAsLeads,
   fetchAllStakeholders,
-  fetchCompanies,
+  fetchPipeline,
   fetchIcps,
   fetchLeadPosts,
   fetchPosts,
@@ -72,14 +71,13 @@ export function PeopleView() {
 function PeopleList({ wsId }: { wsId: string }) {
   const people = useApi(() => fetchAllStakeholders(wsId), [wsId])
   const icps = useApi(() => fetchIcps(wsId), [wsId])
-  // Names for people found through a company search; the rest carry their employer's name as found.
-  const companies = useApi(() => fetchCompanies(wsId, "inWorkspace"), [wsId])
+  // Names of the pipeline companies people were found at; the rest carry their employer's name as found.
+  const companies = useApi(() => fetchPipeline(wsId), [wsId])
   const posts = useApi(() => fetchPosts(wsId), [wsId])
   const [query, setQuery] = useState("")
   const [foundBy, setFoundBy] = useState("all")
   const [status, setStatus] = useState("all")
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [searching, setSearching] = useState(false)
   const [confirmingReveal, setConfirmingReveal] = useState(false)
   const [fetchingPosts, setFetchingPosts] = useState(false)
   const [busy, setBusy] = useState("")
@@ -88,7 +86,7 @@ function PeopleList({ wsId }: { wsId: string }) {
   const list = people.data ?? []
   const icpName = new Map((icps.data ?? []).map((i) => [i.id, i.name]))
   const companyName = new Map((companies.data ?? []).map((c) => [c.id, c.name]))
-  const company = (s: Stakeholder) => (s.companyId && companyName.get(s.companyId)) || s.organizationName || "—"
+  const company = (s: Stakeholder) => (s.pipelineCompanyId && companyName.get(s.pipelineCompanyId)) || s.organizationName || "—"
   const postsByLead = new Map<string, ApiPost[]>()
   for (const p of posts.data ?? []) postsByLead.set(p.leadId, [...(postsByLead.get(p.leadId) ?? []), p])
 
@@ -196,9 +194,6 @@ function PeopleList({ wsId }: { wsId: string }) {
             <SelectItem value="lead">Leads</SelectItem>
           </SelectContent>
         </Select>
-        <Button size="sm" className="ml-auto" disabled={!icps.data?.length} onClick={() => setSearching(true)}>
-          <UserSearch /> Search Apollo by ICP
-        </Button>
       </div>
 
       {picked.length > 0 && (
@@ -233,16 +228,11 @@ function PeopleList({ wsId }: { wsId: string }) {
         <EmptyState
           icon={UserSearch}
           title="Nobody found yet"
-          description="Search Apollo by one of your ICPs, or find people at a company (Apollo or LinkedIn) on the Companies page."
+          description="People are found at qualified companies. Find companies for an ICP, research them, then find their stakeholders."
           action={
-            <div className="flex flex-wrap justify-center gap-2">
-              <Button disabled={!icps.data?.length} onClick={() => setSearching(true)}>
-                <UserSearch /> Search Apollo by ICP
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/companies">Go to Companies</Link>
-              </Button>
-            </div>
+            <Button asChild>
+              <Link href="/companies">Go to Companies</Link>
+            </Button>
           }
         />
       ) : visible.length === 0 ? (
@@ -345,15 +335,6 @@ function PeopleList({ wsId }: { wsId: string }) {
         </div>
       )}
 
-      {searching && icps.data && (
-        <IcpSearchDialog
-          workspaceId={wsId}
-          icps={icps.data}
-          initialIcpId={icps.data.some((i) => i.id === foundBy) ? foundBy : undefined}
-          onClose={() => setSearching(false)}
-          onFound={people.reload}
-        />
-      )}
       {fetchingPosts && (
         <FetchPostsDialog
           wsId={wsId}

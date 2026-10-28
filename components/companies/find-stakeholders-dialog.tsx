@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { type ApiCompany, type StakeholderSearchResult, searchLinkedIn, searchStakeholders } from "@/lib/api"
+import { type StakeholderSearchResult, findPipelineStakeholders } from "@/lib/api"
 import { formatUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
@@ -36,7 +36,7 @@ const LINKEDIN_COST_PER_PERSON = 0.004
 
 type Result = StakeholderSearchResult & { costUsd?: number | null }
 
-/** Find the people at these companies: in Apollo (free search) or on LinkedIn through Apify (paid). */
+/** Find the people at these qualified companies: in Apollo (free search) or on LinkedIn through Apify (paid). */
 export function FindStakeholdersDialog({
   workspaceId,
   companies,
@@ -44,7 +44,7 @@ export function FindStakeholdersDialog({
   onDone,
 }: {
   workspaceId: string
-  companies: ApiCompany[]
+  companies: { id: string; name: string; domain: string | null }[]
   onClose: () => void
   /** Called after a search that saved anyone, so lists can reload. */
   onDone: () => void
@@ -70,10 +70,13 @@ export function FindStakeholdersDialog({
     setRunning(true)
     setFailure("")
     try {
-      const companyIds = companies.map((c) => c.id)
-      const r: Result = linkedin
-        ? await searchLinkedIn(workspaceId, { companyIds, titles, maxPerCompany: max })
-        : await searchStakeholders(workspaceId, { companyIds, titles, seniorities })
+      const r: Result = await findPipelineStakeholders(workspaceId, {
+        companyIds: companies.map((c) => c.id),
+        source,
+        titles,
+        seniorities: linkedin ? [] : seniorities,
+        maxPerCompany: linkedin ? max : 10,
+      })
       setResult(r)
       if (r.results.some((x) => x.new > 0)) onDone()
     } catch (e) {
@@ -93,7 +96,7 @@ export function FindStakeholdersDialog({
           <DialogDescription>
             {linkedin
               ? "Finds people on LinkedIn through Apify, looking each company up by name. Paid per person found."
-              : "Searches Apollo by each company's website domain. Searching is free; only revealing an email uses credits."}
+              : "Searches Apollo by each company's website domain. Searching is free; only revealing an email uses credits. Only qualified companies are searched."}
           </DialogDescription>
         </DialogHeader>
 

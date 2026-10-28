@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Building2, Check, ChevronsUpDown, FileText, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, FileText, Gauge, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -29,6 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { fetchUsage, useApi } from "@/lib/api"
 import { formatUsd } from "@/lib/format"
 import { generationByLead } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
@@ -46,12 +47,18 @@ function Mark() {
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { generations, settings, users, currentUserId } = useStore()
+  const { generations, settings, users, currentUserId, currentWorkspaceId } = useStore()
   const isAdmin = users.find((u) => u.id === currentUserId)?.role === "admin"
   const toReview = Array.from(generationByLead(generations).values()).filter(
     (g) => g.status === "draft" || g.status === "edited",
   ).length
-  const ratio = settings.spentThisMonthUsd / settings.monthlyBudgetUsd
+  // Real spend from the call ledger: Claude (estimated), Apollo and Apify dollars over the last 30 days.
+  const usage = useApi(
+    () => (currentWorkspaceId ? fetchUsage(currentWorkspaceId, 30) : Promise.resolve(null)),
+    [currentWorkspaceId, pathname],
+  )
+  const spent = (usage.data?.providers ?? []).reduce((sum, p) => sum + p.costUsd, 0)
+  const ratio = spent / settings.monthlyBudgetUsd
 
   const nav = [
     { href: "/icps", label: "ICPs", icon: Target },
@@ -60,6 +67,7 @@ export function AppSidebar() {
     { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/prompts", label: "Prompts", icon: FileText },
+    { href: "/usage", label: "Usage", icon: Gauge },
     ...(isAdmin ? [{ href: "/users", label: "Users", icon: UserCog }] : []),
     { href: "/settings", label: "Settings", icon: Settings },
   ]
@@ -105,16 +113,16 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="gap-3 px-2 pb-3">
         <Link
-          href="/settings"
+          href="/usage"
           className="sidebar-reveal space-y-1.5 rounded-md px-2 py-2 whitespace-nowrap transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden"
           style={{ "--i": nav.length + 2 } as CSSProperties}
         >
           <div className="flex items-baseline justify-between text-[13px]">
-            <span className="text-muted-foreground">Spend this month</span>
+            <span className="text-muted-foreground">Spent, last 30 days</span>
             <span className="text-muted-foreground tabular-nums">{Math.round(ratio * 100)}%</span>
           </div>
           <div className="text-[13px] tabular-nums">
-            <span className="font-medium text-foreground">{formatUsd(settings.spentThisMonthUsd)}</span>
+            <span className="font-medium text-foreground">{formatUsd(spent)}</span>
             <span className="text-muted-foreground"> of {formatUsd(settings.monthlyBudgetUsd)}</span>
           </div>
           <div className="h-1.5 overflow-hidden rounded-full bg-sidebar-accent">
