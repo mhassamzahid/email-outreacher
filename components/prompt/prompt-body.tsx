@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MODELS } from "@/lib/format"
+import { cn } from "@/lib/utils"
 import { useStore, type VersionDraft } from "@/lib/store"
 import { availableVariables, unknownVariables } from "@/lib/templating"
 import type { PromptKind } from "@/lib/types"
@@ -39,6 +40,8 @@ export function PromptBody({
   const userRef = useRef<HTMLTextAreaElement>(null)
   const lastFocused = useRef<"systemPrompt" | "userPrompt">("userPrompt")
 
+  // Only hook and email prompts are given posts.
+  const usesPosts = kind === "hook" || kind === "email"
   const unknown = unknownVariables(`${draft.systemPrompt}\n${draft.userPrompt}`, kind)
   const extraColumns = Array.from(new Set(leads.flatMap((l) => Object.keys(l.extra)))).sort()
   const variables = availableVariables(kind).flatMap((v) =>
@@ -105,7 +108,7 @@ export function PromptBody({
             </p>
           </div>
         )}
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className={cn("grid gap-3", usesPosts ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
           <div className="space-y-1.5">
             <Label htmlFor="model">Model</Label>
             <Select value={draft.model} onValueChange={(v) => setDraft((d) => ({ ...d, model: v }))}>
@@ -144,6 +147,29 @@ export function PromptBody({
               onChange={(e) => setDraft((d) => ({ ...d, maxTokens: Math.max(1, Math.round(Number(e.target.value))) }))}
             />
           </div>
+          {usesPosts && (
+            <div className="space-y-1.5">
+              <Label htmlFor="maxPosts">Posts sent</Label>
+              <Input
+                id="maxPosts"
+                type="number"
+                min={1}
+                max={50}
+                placeholder="15"
+                aria-describedby="maxPosts-hint"
+                value={draft.maxPosts ?? ""}
+                onChange={(e) =>
+                  setDraft((d) => ({
+                    ...d,
+                    maxPosts: e.target.value === "" ? null : Math.min(50, Math.max(1, Math.round(Number(e.target.value)))),
+                  }))
+                }
+              />
+              <p id="maxPosts-hint" className="text-xs text-muted-foreground">
+                Newest posts in {"{{items}}"}, 1 to 50. Empty is 15.
+              </p>
+            </div>
+          )}
         </div>
       </div>
 

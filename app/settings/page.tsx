@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react"
 import { AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { AutoSendSettings } from "@/components/auto-send-settings"
+import { FeedbackSettings } from "@/components/feedback/feedback-settings"
 import { PageHeader } from "@/components/page-header"
 import { ScoringPromptEditor } from "@/components/prompt/scoring-prompt-editor"
 import { Pill } from "@/components/status"
@@ -122,6 +123,13 @@ export default function SettingsPage() {
             description="Reads the ICP, the lead, their content and the drafted email, and returns a score from 0 to 100 with reasons."
           >
             <ScoringPromptEditor />
+          </Panel>
+          <Panel
+            id="feedback"
+            title="Learning from feedback"
+            description="Claude doesn't retrain on your ratings. Each new email is written with the ICP's latest rated emails in its prompt; these set how many."
+          >
+            <FeedbackSettings />
           </Panel>
         </div>
 

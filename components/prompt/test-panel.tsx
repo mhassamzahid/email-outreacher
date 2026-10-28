@@ -47,6 +47,7 @@ export function TestPanel({ template, draft }: { template: PromptTemplate; draft
       ? {
           text: choice.seed.hook,
           summary: choice.seed.summary,
+          post: choice.item.text,
           source: choice.item.source,
           url: choice.item.url,
           date: choice.item.postedAt.slice(0, 10),

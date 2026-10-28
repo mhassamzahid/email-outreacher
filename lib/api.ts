@@ -379,7 +379,7 @@ export const fetchUsage = (workspaceId: string, days: number) => api<Usage>(`/us
 
 // ---------- Prompts: Company Verification, Hook Selection, Email Generation, Email scoring ----------
 
-export type PromptDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens">
+export type PromptDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens" | "maxPosts">
 
 export const fetchPrompts = (workspaceId: string) =>
   api<{ prompts: PromptTemplate[]; versions: PromptVersion[] }>("/prompts", { workspaceId })
@@ -407,3 +407,108 @@ export interface CompanyContent {
 
 export const fetchCompanyContent = (workspaceId: string, companyId: string) =>
   api<CompanyContent>(`/pipeline/companies/${companyId}/content`, { workspaceId })
+
+// ---------- Emails: hook selection, email generation and review. Nothing here sends email. ----------
+
+export type EmailStatus = "draft" | "edited" | "approved" | "sent" | "skipped"
+
+export interface EmailDraft {
+  id: string
+  lead: {
+    id: string
+    icpId: string | null
+    firstName: string
+    lastName: string
+    title: string
+    company: string
+    email: string | null
+    linkedinUrl: string | null
+  }
+  status: EmailStatus
+  subject: string
+  body: string
+  originalBody: string
+  edited: boolean
+  hook: string
+  relevance: number
+  confidence: number
+  flags: string[]
+  chosenPost: { source: string; url: string; postedAt: string | null; text: string; whose: "person" | "company" } | null
+  points: { rank: number; point: string; why: string; relevance: number }[]
+  costUsd: number
+  createdAt: string
+  updatedAt: string
+  approvedAt: string | null
+  feedback: EmailFeedback | null
+  /** How many rated emails Claude was shown as examples when it wrote this one. */
+  examplesUsed: number
+}
+
+export type FeedbackTag =
+  | "strong_hook" | "right_tone" | "clear_cta" | "send_as_is"
+  | "too_long" | "too_generic" | "wrong_hook" | "tone_off" | "made_up_facts" | "weak_cta" | "wrong_person"
+
+export interface EmailFeedback {
+  rating: "good" | "bad"
+  tags: FeedbackTag[]
+  note: string
+  updatedAt: string
+}
+
+export interface GenerateResult {
+  results: { leadId: string; name: string | null; status: "drafted" | "failed" | "skipped"; reason: string | null; emailId: string | null }[]
+  drafted: number
+  costUsd: number
+}
+
+export const fetchEmails = (workspaceId: string) => api<EmailDraft[]>("/emails", { workspaceId })
+
+export const generateEmails = (workspaceId: string, leadIds: string[], instruction = "") =>
+  api<GenerateResult>("/emails/generate", { workspaceId, method: "POST", body: { leadIds, instruction } })
+
+export const updateEmail = (
+  workspaceId: string,
+  emailId: string,
+  patch: { subject?: string; body?: string; status?: "draft" | "approved" | "skipped" },
+) => api<EmailDraft>(`/emails/${emailId}`, { workspaceId, method: "PATCH", body: patch })
+
+// ---------- Feedback on generated emails, and prompt improvement from it ----------
+
+export const rateEmail = (workspaceId: string, emailId: string, feedback: Omit<EmailFeedback, "updatedAt">) =>
+  api<EmailDraft>(`/emails/${emailId}/feedback`, { workspaceId, method: "PUT", body: feedback })
+
+export const clearRating = (workspaceId: string, emailId: string) =>
+  api<EmailDraft>(`/emails/${emailId}/feedback`, { workspaceId, method: "DELETE" })
+
+export const fetchFeedbackStats = (workspaceId: string) =>
+  api<{ icpId: string | null; good: number; bad: number }[]>("/emails/feedback/stats", { workspaceId })
+
+export interface PromptSuggestion {
+  promptId: string
+  promptName: string
+  basedOnVersion: number
+  chosenByIcps: number
+  isDefault: boolean
+  examples: number
+  summary: string
+  changes: string[]
+  systemPrompt: string
+  userPrompt: string
+  costUsd: number
+}
+
+export const suggestEmailPrompt = (workspaceId: string, icpId: string) =>
+  api<PromptSuggestion>("/improve/email-prompt", { workspaceId, method: "POST", body: { icpId } })
+
+// ---------- Settings: how many rated emails Claude learns from ----------
+
+export interface FeedbackSettings {
+  goodExamples: number
+  badExamples: number
+  improveExamples: number
+}
+
+export const fetchFeedbackSettings = (workspaceId: string) => api<FeedbackSettings>("/settings/feedback", { workspaceId })
+
+export const saveFeedbackSettings = (workspaceId: string, body: FeedbackSettings) =>
+  api<FeedbackSettings>("/settings/feedback", { workspaceId, method: "PUT", body })

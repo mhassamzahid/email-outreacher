@@ -59,7 +59,8 @@ export function VersionHistory({ template, onRestored }: { template: PromptTempl
   const a = list.find((v) => v.id === aId) ?? list[1] ?? list[0]
   const b = list.find((v) => v.id === bId) ?? list[0]
 
-  const settingsLine = (v: PromptVersion) => `model: ${v.model}\ntemperature: ${v.temperature}\nmax tokens: ${v.maxTokens}`
+  const settingsLine = (v: PromptVersion) =>
+    `model: ${v.model}\ntemperature: ${v.temperature}\nmax tokens: ${v.maxTokens}\nposts sent: ${v.maxPosts ?? "15 (default)"}`
 
   const picker = (value: string | undefined, onChange: (v: string) => void, label: string) => (
     <Select value={value} onValueChange={onChange}>

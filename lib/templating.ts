@@ -27,7 +27,7 @@ const LEAD_VARS = [
   "lead.website",
 ]
 
-const HOOK_VARS = ["hook.text", "hook.source", "hook.url", "hook.date", "hook.summary"]
+const HOOK_VARS = ["hook.text", "hook.summary", "hook.post", "hook.source", "hook.url", "hook.date"]
 
 const EMAIL_VARS = ["email.subject", "email.body"]
 
@@ -53,7 +53,8 @@ const VERIFY_VARS = [
 export function availableVariables(kind: PromptKind): string[] {
   if (kind === "verify") return VERIFY_VARS
   if (kind === "hook") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items"]
-  if (kind === "email") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", ...HOOK_VARS]
+  // Email prompts can also see every post ({{items}}), not just the chosen one ({{hook.post}}).
+  if (kind === "email") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS]
   return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...EMAIL_VARS]
 }
 
@@ -76,6 +77,8 @@ export interface HookContext {
   url: string
   date: string
   summary: string
+  /** The full text of the chosen post. */
+  post: string
 }
 
 export interface RenderContext {
@@ -120,6 +123,7 @@ export function buildVariables(ctx: RenderContext): Record<string, string> {
     "hook.url": hook?.url ?? "",
     "hook.date": hook?.date ?? "",
     "hook.summary": hook?.summary ?? "",
+    "hook.post": hook?.post ?? "",
     "email.subject": email?.subject ?? "",
     "email.body": email?.body ?? "",
   }

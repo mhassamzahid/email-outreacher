@@ -62,6 +62,7 @@ const toDraft = (v: PromptVersion): VersionDraft => ({
   model: v.model,
   temperature: v.temperature,
   maxTokens: v.maxTokens,
+  maxPosts: v.maxPosts,
 })
 
 function Editor({

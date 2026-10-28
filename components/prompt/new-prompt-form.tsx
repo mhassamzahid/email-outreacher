@@ -33,7 +33,7 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
   const loadSource = ({ kind, from }: Source): VersionDraft => {
     const tpl = from !== STARTER ? templates.find((t) => t.id === from) : undefined
     const v = tpl && versions.find((x) => x.id === tpl.currentVersionId)
-    if (v) return { systemPrompt: v.systemPrompt, userPrompt: v.userPrompt, model: v.model, temperature: v.temperature, maxTokens: v.maxTokens }
+    if (v) return { systemPrompt: v.systemPrompt, userPrompt: v.userPrompt, model: v.model, temperature: v.temperature, maxTokens: v.maxTokens, maxPosts: v.maxPosts }
     return { ...PROMPT_STARTERS[kind], model: settings.defaultModel }
   }
 

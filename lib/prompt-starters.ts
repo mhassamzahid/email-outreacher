@@ -3,7 +3,7 @@ import type { PromptKind, PromptVersion } from "./types"
 // Starting points for new prompts. Each one already returns the JSON shape the app expects,
 // so a new template works before it is customised.
 
-type Starter = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "temperature" | "maxTokens">
+type Starter = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "temperature" | "maxTokens" | "maxPosts">
 
 export const PROMPT_STARTERS: Record<PromptKind, Starter> = {
   verify: {
@@ -24,6 +24,7 @@ Website text:
 Score this company's fit with the ICP from 0 to 100, with a one-sentence summary, reasons and concerns.`,
     temperature: 0,
     maxTokens: 4096,
+    maxPosts: null,
   },
   hook: {
     systemPrompt: "You pick the single best personalization hook for a cold email. A weak or risky hook is worse than no hook.",
@@ -42,6 +43,7 @@ Return JSON only:
 { "chosen_item": <item number or null>, "summary": "...", "hook": "<one sentence, max 25 words>", "relevance": <0-5>, "flags": [] }`,
     temperature: 0.2,
     maxTokens: 400,
+    maxPosts: null,
   },
   email: {
     systemPrompt: "You write short, plain-text cold emails that sound like one person writing to another. Never invent facts.",
@@ -65,6 +67,7 @@ Return JSON only:
 { "subject": "...", "body": "...", "confidence": <0-100> }`,
     temperature: 0.7,
     maxTokens: 600,
+    maxPosts: null,
   },
   score: {
     systemPrompt: "You score how safe and worthwhile a cold email is to send without a person checking it. When unsure, score lower.",
@@ -86,6 +89,7 @@ Return JSON only:
 { "score": <0-100>, "reasons": ["...", "..."] }`,
     temperature: 0,
     maxTokens: 250,
+    maxPosts: null,
   },
 }
 

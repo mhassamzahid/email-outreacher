@@ -1,8 +1,9 @@
 "use client"
 
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { ExternalLink, MailCheck, Newspaper, Search, UserPlus, UserSearch } from "lucide-react"
+import { ExternalLink, MailCheck, Newspaper, Search, Sparkles, UserPlus, UserSearch } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
 import { ConfirmDialog } from "@/components/confirm-dialog"
@@ -27,6 +28,7 @@ import {
   fetchIcps,
   fetchLeadPosts,
   fetchPosts,
+  generateEmails,
   revealStakeholders,
   useApi,
 } from "@/lib/api"
@@ -69,6 +71,7 @@ export function PeopleView() {
 }
 
 function PeopleList({ wsId }: { wsId: string }) {
+  const router = useRouter()
   const people = useApi(() => fetchAllStakeholders(wsId), [wsId])
   const icps = useApi(() => fetchIcps(wsId), [wsId])
   // Names of the pipeline companies people were found at; the rest carry their employer's name as found.
@@ -131,6 +134,26 @@ function PeopleList({ wsId }: { wsId: string }) {
       people.reload()
     } catch (e) {
       toast.error("Couldn't reveal", { description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setBusy("")
+    }
+  }
+
+  // Hook selection then email generation for each lead, on its ICP's prompts. Drafts go to Review.
+  const writeEmails = async () => {
+    setBusy("write")
+    const id = toast.loading(`Writing ${withLead.length} ${withLead.length === 1 ? "email" : "emails"}… this can take a minute`)
+    try {
+      const r = await generateEmails(wsId, withLead.map((s) => s.leadId!))
+      const problems = r.results.filter((x) => x.status !== "drafted")
+      const reasons = [...new Set(problems.map((x) => x.reason).filter(Boolean))]
+      const summary = `${r.drafted} drafted${problems.length ? `, ${problems.length} not` : ""}`
+      const description = [r.costUsd ? `Claude cost ${formatUsd(r.costUsd)}.` : "", ...reasons].filter(Boolean).join(" ") || undefined
+      if (r.drafted) toast.success(summary, { id, description, action: { label: "Review", onClick: () => router.push("/review") } })
+      else toast.error(summary, { id, description })
+      setSelected(new Set())
+    } catch (e) {
+      toast.error("Couldn't write them", { id, description: e instanceof Error ? e.message : undefined })
     } finally {
       setBusy("")
     }
@@ -211,6 +234,15 @@ function PeopleList({ wsId }: { wsId: string }) {
               onClick={() => setFetchingPosts(true)}
             >
               <Newspaper /> Fetch posts for {withLead.length}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!withLead.length || withLead.length > MAX_FETCH || !!busy}
+              title={withLead.length > MAX_FETCH ? `Write emails for up to ${MAX_FETCH} leads at a time` : undefined}
+              onClick={() => void writeEmails()}
+            >
+              <Sparkles /> {busy === "write" ? "Writing…" : `Write emails for ${withLead.length}`}
             </Button>
             <Button
               size="sm"

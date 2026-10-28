@@ -164,6 +164,8 @@ export interface PromptVersion {
   model: string
   temperature: number
   maxTokens: number
+  /** Hook and email prompts: how many of the newest posts {{items}} holds. null means 15. */
+  maxPosts: number | null
   note: string
   createdAt: string
 }

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Building2, Check, ChevronsUpDown, FileText, Gauge, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, FileText, Gauge, MessageSquareText, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -29,9 +29,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { fetchUsage, useApi } from "@/lib/api"
+import { fetchEmails, fetchUsage, useApi } from "@/lib/api"
 import { formatUsd } from "@/lib/format"
-import { generationByLead } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
 
@@ -47,11 +46,14 @@ function Mark() {
 
 export function AppSidebar() {
   const pathname = usePathname()
-  const { generations, settings, users, currentUserId, currentWorkspaceId } = useStore()
+  const { settings, users, currentUserId, currentWorkspaceId } = useStore()
   const isAdmin = users.find((u) => u.id === currentUserId)?.role === "admin"
-  const toReview = Array.from(generationByLead(generations).values()).filter(
-    (g) => g.status === "draft" || g.status === "edited",
-  ).length
+  // Drafts waiting for a person, from the backend.
+  const drafts = useApi(
+    () => (currentWorkspaceId ? fetchEmails(currentWorkspaceId) : Promise.resolve([])),
+    [currentWorkspaceId, pathname],
+  )
+  const toReview = (drafts.data ?? []).filter((d) => d.status === "draft" || d.status === "edited").length
   // Real spend from the call ledger: Claude (estimated), Apollo and Apify dollars over the last 30 days.
   const usage = useApi(
     () => (currentWorkspaceId ? fetchUsage(currentWorkspaceId, 30) : Promise.resolve(null)),
@@ -65,6 +67,7 @@ export function AppSidebar() {
     { href: "/companies", label: "Companies", icon: Building2 },
     { href: "/people", label: "People", icon: UserSearch },
     { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
+    { href: "/feedback", label: "Feedback", icon: MessageSquareText },
     { href: "/leads", label: "Leads", icon: Users },
     { href: "/prompts", label: "Prompts", icon: FileText },
     { href: "/usage", label: "Usage", icon: Gauge },

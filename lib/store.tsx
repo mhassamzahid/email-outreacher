@@ -52,7 +52,7 @@ export interface GenerationJob {
   running: boolean
 }
 
-export type VersionDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens">
+export type VersionDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens" | "maxPosts">
 
 interface Store {
   icps: ICP[]
@@ -462,10 +462,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const restoreVersion: Store["restoreVersion"] = async (versionId) => {
     const source = versions.find((v) => v.id === versionId)
     if (!source) return undefined
-    const { systemPrompt, userPrompt, model, temperature, maxTokens } = source
+    const { systemPrompt, userPrompt, model, temperature, maxTokens, maxPosts } = source
     return saveVersion(
       source.templateId,
-      { systemPrompt, userPrompt, model, temperature, maxTokens },
+      { systemPrompt, userPrompt, model, temperature, maxTokens, maxPosts },
       `Restored from v${source.version}`,
     )
   }
@@ -480,11 +480,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const duplicateTemplate: Store["duplicateTemplate"] = async (templateId) => {
     const tpl = templates.find((t) => t.id === templateId)!
     const current = versions.find((v) => v.id === tpl.currentVersionId)!
-    const { systemPrompt, userPrompt, model, temperature, maxTokens } = current
+    const { systemPrompt, userPrompt, model, temperature, maxTokens, maxPosts } = current
     return createTemplate({
       name: `${tpl.name} (copy)`,
       kind: tpl.kind,
-      draft: { systemPrompt, userPrompt, model, temperature, maxTokens },
+      draft: { systemPrompt, userPrompt, model, temperature, maxTokens, maxPosts },
       note: `Duplicated from ${tpl.name} v${current.version}`,
     })
   }
