@@ -1,14 +1,18 @@
 "use client"
 
+import Link from "next/link"
 import type { ReactNode } from "react"
 import { Plus } from "lucide-react"
 import { SourceIcon } from "@/components/source-icon"
 import { TagInput } from "@/components/tag-input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { fetchProducts, useApi } from "@/lib/api"
 import { SOURCE_LABEL, formatUsd } from "@/lib/format"
 import { costPerLeadForSource } from "@/lib/mock-actions"
+import { useStore } from "@/lib/store"
 import type { ICP, IcpOutreach, IcpSource } from "@/lib/types"
 import { SOURCES } from "@/lib/types"
 
@@ -30,6 +34,7 @@ export const toDraft = (icp: ICP): IcpDraft => ({
   wordsToAvoid: icp.wordsToAvoid,
   hookGuidance: icp.hookGuidance,
   enabledSources: icp.enabledSources,
+  productId: icp.productId,
 })
 
 /** Messaging fields in the order the email prompt reads them, with how each one is used. */
@@ -261,6 +266,51 @@ export function LeadIntelRule({ icp }: { icp: ICP }) {
       </RuleRow>
       <RuleRow label="Businesses in it">{icp.companyCount.toLocaleString()}</RuleRow>
     </dl>
+  )
+}
+
+const NO_PRODUCT = "__none__"
+
+/** Which product this ICP is sold. Its details fill {{product.*}} in this ICP's prompts. */
+export function ProductField({ draft, set }: { draft: IcpDraft; set: SetDraft }) {
+  const { currentWorkspaceId } = useStore()
+  const products = useApi(
+    () => (currentWorkspaceId ? fetchProducts(currentWorkspaceId) : Promise.resolve([])),
+    [currentWorkspaceId],
+  )
+  const chosen = products.data?.find((p) => p.id === draft.productId)
+  return (
+    <Field
+      id="productId"
+      label="Product we sell them"
+      hint={
+        chosen?.description ||
+        "Its description, value, proof, offer and call to action are available to this ICP's prompts as {{product.*}}."
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          value={draft.productId ?? NO_PRODUCT}
+          onValueChange={(v) => set("productId", v === NO_PRODUCT ? null : v)}
+          disabled={!products.data}
+        >
+          <SelectTrigger id="productId" className="w-72!">
+            <SelectValue placeholder="Loading products…" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_PRODUCT}>No product</SelectItem>
+            {(products.data ?? []).map((p) => (
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Link href="/products" className="text-[13px] text-data hover:underline">
+          {products.data?.length ? "Manage products" : "Add a product"}
+        </Link>
+      </div>
+    </Field>
   )
 }
 

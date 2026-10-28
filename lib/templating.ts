@@ -45,16 +45,47 @@ const COMPANY_VARS = [
   "company.apollo",
 ]
 
+/** The ICP's product (Products page), filled by the backend. Empty when the ICP has none. */
+const PRODUCT_VARS = [
+  "product.name",
+  "product.description",
+  "product.value",
+  "product.proof",
+  "product.offer",
+  "product.cta",
+  "product.url",
+]
+
 /** Company Verification prompts are filled by the backend from a researched company. */
-const VERIFY_VARS = ["icp.name", "icp.industry", "icp.places", "icp.description", "icp.pains", "icp.offer", "icp.rules", ...COMPANY_VARS]
+const VERIFY_VARS = [
+  "icp.name",
+  "icp.industry",
+  "icp.places",
+  "icp.description",
+  "icp.pains",
+  "icp.offer",
+  "icp.rules",
+  ...COMPANY_VARS,
+  ...PRODUCT_VARS,
+]
 
 /** Variables offered in the editor sidebar for each prompt kind. `lead.extra.*` is matched by prefix. */
 export function availableVariables(kind: PromptKind): string[] {
   if (kind === "verify") return VERIFY_VARS
-  if (kind === "hook") return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...COMPANY_VARS, "company.summary"]
+  if (kind === "hook")
+    return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...COMPANY_VARS, "company.summary", ...PRODUCT_VARS]
   // Email prompts can also see every post ({{items}}), not just the chosen one ({{hook.post}}).
   if (kind === "email")
-    return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...COMPANY_VARS, "company.summary"]
+    return [
+      ...ICP_VARS,
+      ...LEAD_VARS,
+      "lead.extra.<column>",
+      "items",
+      ...HOOK_VARS,
+      ...COMPANY_VARS,
+      "company.summary",
+      ...PRODUCT_VARS,
+    ]
   return [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", "items", ...HOOK_VARS, ...EMAIL_VARS]
 }
 

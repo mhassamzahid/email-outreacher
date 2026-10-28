@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Building2, Check, ChevronsUpDown, FileText, Gauge, MessageSquareText, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, FileText, Gauge, MessageSquareText, Package, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -64,6 +64,7 @@ export function AppSidebar() {
 
   const nav = [
     { href: "/icps", label: "ICPs", icon: Target },
+    { href: "/products", label: "Products", icon: Package },
     { href: "/companies", label: "Companies", icon: Building2 },
     { href: "/people", label: "People", icon: UserSearch },
     { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },

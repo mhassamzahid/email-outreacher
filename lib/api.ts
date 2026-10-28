@@ -121,6 +121,7 @@ const EMPTY_OUTREACH: IcpOutreach = {
   wordsToAvoid: "",
   hookGuidance: "",
   enabledSources: ["linkedin", "website"],
+  productId: null,
   verifyPromptId: null,
   hookPromptId: null,
   emailPromptId: null,
@@ -147,6 +148,7 @@ export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: Ic
     wordsToAvoid: outreach.wordsToAvoid,
     hookGuidance: outreach.hookGuidance,
     enabledSources: outreach.enabledSources,
+    productId: outreach.productId,
     verifyPromptId: outreach.verifyPromptId,
     hookPromptId: outreach.hookPromptId,
     emailPromptId: outreach.emailPromptId,
@@ -579,3 +581,34 @@ export const importPeople = (workspaceId: string, csv: string, icpId: string | n
     method: "POST",
     csv,
   })
+
+// ---------- Products: what we sell. Each ICP picks one. ----------
+
+export interface ProductFields {
+  name: string
+  description: string
+  value: string
+  proof: string
+  offer: string
+  cta: string
+  url: string
+}
+
+export interface Product extends ProductFields {
+  id: string
+  createdAt: string
+  updatedAt: string
+  /** The ICPs that sell this product. */
+  icpIds: string[]
+}
+
+export const fetchProducts = (workspaceId: string) => api<Product[]>("/products", { workspaceId })
+
+export const createProduct = (workspaceId: string, body: ProductFields) =>
+  api<Product>("/products", { workspaceId, method: "POST", body })
+
+export const updateProduct = (workspaceId: string, id: string, body: ProductFields) =>
+  api<Product>(`/products/${id}`, { workspaceId, method: "PUT", body })
+
+export const deleteProduct = (workspaceId: string, id: string) =>
+  api<void>(`/products/${id}`, { workspaceId, method: "DELETE" })

@@ -56,6 +56,8 @@ export interface ICP {
   wordsToAvoid: string
   hookGuidance: string
   enabledSources: Source[]
+  /** What we sell to this ICP (a product's id), or null. */
+  productId: string | null
   /** null = use the default company verification template */
   verifyPromptId: string | null
   /** null = use the default hook template */
@@ -80,6 +82,7 @@ export type IcpOutreach = Pick<
   | "wordsToAvoid"
   | "hookGuidance"
   | "enabledSources"
+  | "productId"
   | "verifyPromptId"
   | "hookPromptId"
   | "emailPromptId"

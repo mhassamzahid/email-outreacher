@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
-import { BasicsFields, LeadIntelRule, MessagingFields, SourcesFields, TargetingFields, toDraft, type IcpDraft } from "@/components/icp-form"
+import { BasicsFields, LeadIntelRule, MessagingFields, ProductField, SourcesFields, TargetingFields, toDraft, type IcpDraft } from "@/components/icp-form"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -93,6 +93,9 @@ function DefinitionForm({ icp }: { icp: ICP }) {
               <CardDescription>Available in prompts as {"{{icp.pains}}"}, {"{{icp.offer}}"} and so on.</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-5">
+                <ProductField draft={draft} set={set} />
+              </div>
               <MessagingFields draft={draft} set={set} />
             </CardContent>
           </Card>
