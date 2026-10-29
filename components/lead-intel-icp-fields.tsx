@@ -123,14 +123,14 @@ export function IcpBasicsInputs({
         <IcpField
           id="icp-search-terms"
           label="Words to find them on Google Maps"
-          hint="Lead Intel searches with these. Empty means it only matches businesses already in the list."
+          hint="What you'd type into Google Maps. Search Google Maps and Search Apollo start from these."
         >
           <TagInput id="icp-search-terms" value={icp.searchTerms} onChange={(v) => set("searchTerms", v)} placeholder="screen printing" />
         </IcpField>
       </div>
       <Label className="flex cursor-pointer items-center gap-2 text-sm font-normal sm:col-span-2">
         <Switch checked={icp.enabled} onCheckedChange={(v) => set("enabled", v)} />
-        Turned on (Lead Intel uses it when sorting businesses)
+        Turned on
       </Label>
     </div>
   )

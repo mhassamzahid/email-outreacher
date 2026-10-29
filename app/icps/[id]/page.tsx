@@ -74,8 +74,8 @@ function DefinitionForm({ icp }: { icp: ICP }) {
                 <div className="space-y-1.5">
                   <CardTitle>Lead Intel definition</CardTitle>
                   <CardDescription>
-                    Shared with Lead Intel. These are its fields, exactly as Lead Intel stores them. Editing them changes the
-                    ICP for Lead Intel too.
+                    Who this ICP is: the words Google Maps and Apollo search with, where, and the rule research checks
+                    companies against. Stored in Lead Intel&apos;s ICP table, which this app keeps using.
                   </CardDescription>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => setEditing(true)}>

@@ -1,12 +1,14 @@
 "use client"
 
-import type { ReactNode } from "react"
-import { AtSign, Check, ExternalLink, Globe, Sparkles, UserSearch, X } from "lucide-react"
+import { useState, type ReactNode } from "react"
+import { AtSign, Ban, Check, ContactRound, ExternalLink, Globe, Sparkles, UserSearch, X } from "lucide-react"
+import { CompanyContacts, ExcludeCompanyDialog } from "@/components/companies/company-contacts"
 import { SOURCE_NAME, StatusPill } from "@/components/companies/pipeline-cells"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { type PipelineCompany, fetchCompanyContent, fetchCompanyDetail, useApi } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
 import { compactCount, shortDate } from "@/lib/format"
 
 const RULE_SOURCE: Record<string, string> = {
@@ -92,6 +94,7 @@ export function PipelineSheet({
   onClose,
   onStatus,
   onFindStakeholders,
+  onExcluded,
 }: {
   workspaceId: string
   company: PipelineCompany
@@ -99,7 +102,12 @@ export function PipelineSheet({
   onClose: () => void
   onStatus: (status: "qualified" | "not_fit") => void
   onFindStakeholders: () => void
+  /** The company went on the do-not-contact list: reload it. */
+  onExcluded: () => void
 }) {
+  const { me } = useAuth()
+  const [excluding, setExcluding] = useState(false)
+  const canExclude = me?.role === "admin" || me?.role === "management"
   const site = company.research?.website
   const ig = company.research?.instagram
   const socials = { ...(company.research?.socials ?? {}), ...(company.instagramUrl ? { instagram: company.instagramUrl } : {}) }
@@ -136,8 +144,20 @@ export function PipelineSheet({
                 <X /> Drop
               </Button>
             )}
+            {canExclude && (
+              <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setExcluding(true)}>
+                <Ban /> Never contact
+              </Button>
+            )}
           </div>
         </SheetHeader>
+        {excluding && (
+          <ExcludeCompanyDialog workspaceId={workspaceId} company={company} onClose={() => setExcluding(false)} onExcluded={onExcluded} />
+        )}
+
+        <Section title="Contacts on their site" icon={ContactRound}>
+          <CompanyContacts workspaceId={workspaceId} company={company} />
+        </Section>
 
         {score && !score.error && (
           <Section title={`Claude's score (${score.model})`} icon={Sparkles}>

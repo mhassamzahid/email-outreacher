@@ -60,7 +60,7 @@ export default function IcpsPage() {
         description={
           toReview > 0
             ? `${toReview} drafts waiting for review in ${waiting} ICP${waiting === 1 ? "" : "s"} · ${notEnriched} leads not enriched yet`
-            : "ICPs are shared with Lead Intel. Outreach settings for each are kept per workspace."
+            : "Who you're looking for. Outreach settings for each are kept per workspace."
         }
         actions={newButton}
       />
@@ -77,7 +77,7 @@ export default function IcpsPage() {
           <EmptyState
             icon={Target}
             title="No ICPs yet"
-            description="Add one here or in Lead Intel. Either way, both projects share it."
+            description="Add one to say who you're looking for, then find companies for it."
             action={newButton}
           />
         ) : (

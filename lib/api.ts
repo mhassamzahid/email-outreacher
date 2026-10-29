@@ -182,6 +182,32 @@ export const deleteWorkspace = (id: string) => api<void>(`/workspaces/${id}`, { 
 export const setWorkspaceMembersApi = (id: string, userIds: string[]) =>
   api<void>(`/workspaces/${id}/members`, { method: "PUT", body: { userIds } })
 
+// ---------- Do-not-contact list: one for every workspace ----------
+
+export type ExclusionKeyType = "domain" | "email" | "phone" | "place_id" | "name_location"
+export type ExclusionReason = "current_client" | "past_client" | "do_not_contact" | "competitor" | "other"
+
+export interface Exclusion {
+  id: string
+  keyType: ExclusionKeyType
+  keyValue: string
+  reason: ExclusionReason
+  businessName: string
+  note: string
+  createdAt: string
+}
+
+export const fetchExclusions = () => api<Exclusion[]>("/exclusions")
+
+export const addExclusion = (body: { keyType: ExclusionKeyType; value: string; reason: ExclusionReason; businessName?: string; note?: string }) =>
+  api<Exclusion>("/exclusions", { method: "POST", body })
+
+export const removeExclusion = (id: string) => api<void>(`/exclusions/${id}`, { method: "DELETE" })
+
+/** Every key the pipeline company has goes on the list, and it's marked not a fit. */
+export const excludeCompany = (workspaceId: string, companyId: string, reason: ExclusionReason, note = "") =>
+  api<Exclusion[]>(`/exclusions/company/${companyId}`, { workspaceId, method: "POST", body: { reason, note } })
+
 // ---------- Users: role and workspaces here; accounts and passwords in Supabase ----------
 
 export const fetchMe = () => api<User>("/me")
@@ -348,9 +374,20 @@ export interface PipelineCompany {
     website: { outcome: string; via: string | null; url: string | null; title: string; text: string; detail: string | null } | null
     socials: Record<string, string>
     instagram: { handle: string; name: string; bio: string; category: string | null; followers: number | null; private: boolean } | null
+    /** What the site publishes for reaching them; the owner only where the page says so. */
+    contacts?: SiteContacts | null
   } | null
   researchedAt: string | null
   createdAt: string
+}
+
+/** Stored inside the company's research JSON, so the keys keep the backend's spelling. */
+export interface SiteContacts {
+  email: string | null
+  all_emails: string[]
+  phone: string | null
+  owner_name: string | null
+  owner_name_source: string | null
 }
 
 export interface SourceFindResult {
@@ -360,6 +397,8 @@ export interface SourceFindResult {
   upgraded: number
   totalAvailable: number | null
   error: string | null
+  /** On the do-not-contact list, so not added. */
+  excluded?: number
   /** Google Maps: requests made, what they cost, and anything worth knowing about the run. */
   searches?: number | null
   costUsd?: number | null

@@ -78,6 +78,11 @@
   --data: #1b6c80;
   --data-mid: #6fa8b6;
   --data-soft: #d5e7eb;
+  /* Sign-in panel: the data teal, deepened. */
+  --login-panel: #0f3b46;
+  --login-ink: #eef7f9;
+  --login-line: #8cc9d6;
+  --login-signal: #b8f0fb;
   --positive: #1e7b4f;
   --negative: #c4242a;
   --warning: #92400e;
@@ -129,6 +134,10 @@
   --data: #5bb5c9;
   --data-mid: #2f7484;
   --data-soft: #285a66;
+  --login-panel: #0b2a31;
+  --login-ink: #e6f3f6;
+  --login-line: #5bb5c9;
+  --login-signal: #a6ecf9;
   --positive: #3fc07a;
   --negative: #e5566f;
   --warning: #f0b45a;
@@ -258,6 +267,59 @@
     transform: none !important;
   }
   [data-sidebar-motion="on"] .sidebar-reveal {
+    animation: none;
+  }
+}
+
+/* ---------- Sign-in: the ring field ---------- */
+.login-panel {
+  background: var(--login-panel);
+  color: var(--login-ink);
+}
+.login-tick {
+  stroke: var(--login-line);
+  stroke-width: 1;
+  opacity: 0.22;
+}
+.login-ring {
+  fill: none;
+  stroke: var(--login-line);
+  stroke-linecap: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+.login-dot {
+  fill: var(--login-line);
+}
+.login-dot-lead {
+  fill: var(--login-signal);
+  filter: drop-shadow(0 0 8px var(--login-signal));
+}
+/* One moment on load: the rings draw in from the centre outward, then each message leaves its gap. */
+@keyframes login-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+@keyframes login-leave {
+  from {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+}
+.login-ring {
+  animation: login-draw 1100ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 80ms);
+}
+.login-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: login-leave 600ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(700ms + var(--i, 0) * 80ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-ring,
+  .login-dot {
     animation: none;
   }
 }

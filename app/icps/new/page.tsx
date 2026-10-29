@@ -42,7 +42,7 @@ export default function NewIcpPage() {
     try {
       const { icp: created, warning } = await createIcp(icp, { titles, description })
       if (warning) toast.warning(warning)
-      else toast.success(`Added ${created.name}`, { description: "It's in Lead Intel too. Lead Intel sorts businesses into it on its next match." })
+      else toast.success(`Added ${created.name}`, { description: "Find companies for it on the Companies page, with Google Maps or Apollo." })
       router.push(`/icps/${created.id}`)
     } catch (e) {
       setServerError(e instanceof Error ? e.message : "Couldn't add the ICP.")
@@ -62,7 +62,7 @@ export default function NewIcpPage() {
       <div className="-mt-4 md:-mt-5">
         <PageHeader
           title="New ICP"
-          description="Added to Lead Intel's ICPs, so both projects see it. Who to reach is saved for this workspace."
+          description="Who it is and where they are, for searching Google Maps and Apollo and checking companies. Who to reach is saved for this workspace."
           actions={
             <>
               <Button variant="outline" asChild>

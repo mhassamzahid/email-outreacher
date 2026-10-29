@@ -34,6 +34,7 @@ function ResultLine({ label, r }: { label: string; r: SourceFindResult | null })
     <p className="rounded-md bg-muted/50 px-3 py-2 text-sm tabular-nums">
       <span className="font-medium">{label}:</span> {r.found} found, {r.added} new
       {r.duplicates ? `, ${r.duplicates} already in the pipeline` : ""}
+      {r.excluded ? `, ${r.excluded} on the do-not-contact list` : ""}
       {r.totalAvailable !== null && r.totalAvailable > r.found ? ` (${r.totalAvailable.toLocaleString()} available)` : ""}
     </p>
   )

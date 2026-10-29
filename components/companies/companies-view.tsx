@@ -348,6 +348,10 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
           onClose={() => setOpen(null)}
           onStatus={(status) => void changeStatus(open, status)}
           onFindStakeholders={() => setStakeholdersFor([open])}
+          onExcluded={() => {
+            setOpen(null)
+            companies.reload()
+          }}
         />
       )}
     </>

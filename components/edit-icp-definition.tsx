@@ -35,7 +35,7 @@ export function EditIcpDefinition({ icp, onClose }: { icp: ICP; onClose: () => v
     try {
       await updateIcpDefinition(icp.id, draft)
       toast.success(`Saved ${draft.name.trim()}`, {
-        description: "Saved in Lead Intel too. It re-sorts businesses into this ICP on its next match.",
+        description: "The next Google Maps or Apollo search, and the next research, use the new definition.",
       })
       onClose()
     } catch (e) {
@@ -50,8 +50,8 @@ export function EditIcpDefinition({ icp, onClose }: { icp: ICP; onClose: () => v
         <SheetHeader className="px-5 pt-5 pb-4">
           <SheetTitle className="text-lg">Edit {icp.name}</SheetTitle>
           <SheetDescription>
-            These fields live in Lead Intel, shared by both projects. Changing them changes the ICP for Lead Intel too, and it
-            re-sorts businesses on its next match.
+            Searches and research use these. They&apos;re stored in Lead Intel&apos;s ICP table, which this app keeps using;
+            companies already in a pipeline aren&apos;t checked again.
           </SheetDescription>
         </SheetHeader>
         <form

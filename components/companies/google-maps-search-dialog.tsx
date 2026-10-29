@@ -156,7 +156,8 @@ export function GoogleMapsSearchDialog({
             <div className="space-y-1 rounded-md bg-muted/50 px-3 py-2 text-sm">
               <p className="tabular-nums">
                 {result.found} found, {result.added} new
-                {result.duplicates ? `, ${result.duplicates} already in the pipeline` : ""}. {result.searches ?? 0} Google
+                {result.duplicates ? `, ${result.duplicates} already in the pipeline` : ""}
+                {result.excluded ? `, ${result.excluded} on the do-not-contact list` : ""}. {result.searches ?? 0} Google
                 request{result.searches === 1 ? "" : "s"}, {formatUsd(result.costUsd ?? 0)}.
               </p>
               {result.notes?.map((n) => (

@@ -9,8 +9,8 @@ import { useAuth } from "@/lib/auth"
 import { authConfigured } from "@/lib/supabase"
 import { StoreProvider } from "@/lib/store"
 
-// Pages anyone can open: signing in, and setting a new password from a reset email.
-const PUBLIC = ["/login", "/reset-password"]
+// The one page anyone can open.
+const PUBLIC = ["/login"]
 
 /** Shows the app to a signed-in person and sends everyone else to /login. */
 export function AuthGate({ sidebarOpen, children }: { sidebarOpen: boolean; children: ReactNode }) {

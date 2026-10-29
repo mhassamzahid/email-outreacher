@@ -60,7 +60,13 @@ export function LeadIntelImportDialog({
       ).leadIntel
       if (r?.error) throw new Error(r.error)
       toast.success(`Imported ${r?.added ?? 0} ${r?.added === 1 ? "company" : "companies"} into ${icp.name}`, {
-        description: r?.upgraded ? `${r.upgraded} had already been found in Apollo and are now marked as Lead Intel's.` : undefined,
+        description:
+          [
+            r?.upgraded ? `${r.upgraded} had already been found in Apollo and are now marked as Lead Intel's.` : "",
+            r?.excluded ? `${r.excluded} on the do-not-contact list were left out.` : "",
+          ]
+            .filter(Boolean)
+            .join(" ") || undefined,
       })
       onImported(icp.id)
       onClose()

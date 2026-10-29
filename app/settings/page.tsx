@@ -5,6 +5,7 @@ import { AlertTriangle } from "lucide-react"
 import { toast } from "sonner"
 import { AutoSendSettings } from "@/components/auto-send-settings"
 import { FeedbackSettings } from "@/components/feedback/feedback-settings"
+import { ExclusionsSettings } from "@/components/settings/exclusions-settings"
 import { ResearchSettings } from "@/components/settings/research-settings"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
@@ -135,6 +136,13 @@ export default function SettingsPage() {
             description="When you research a company, Claude reads its website one page at a time and decides after each page whether it needs another. These cap how far it goes."
           >
             <ResearchSettings />
+          </Panel>
+          <Panel
+            id="do-not-contact"
+            title="Do not contact"
+            description="Never found, made a lead, or written to, in any workspace. Companies are matched by website, phone, Google listing or name and city; people by email or its domain."
+          >
+            <ExclusionsSettings />
           </Panel>
         </div>
 

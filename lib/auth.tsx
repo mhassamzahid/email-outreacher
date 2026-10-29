@@ -14,8 +14,6 @@ interface Auth {
   meError: string | null
   signIn: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
-  /** Email a link to set a new password, landing on /reset-password. */
-  sendReset: (email: string) => Promise<void>
   reloadMe: () => void
 }
 
@@ -61,17 +59,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }, [])
 
-  const sendReset = useCallback(async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
-    })
-    if (error) throw new Error(error.message)
-  }, [])
-
   const reloadMe = useCallback(() => setTick((t) => t + 1), [])
 
   return (
-    <AuthContext.Provider value={{ session, me, meError, signIn, signOut, sendReset, reloadMe }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ session, me, meError, signIn, signOut, reloadMe }}>{children}</AuthContext.Provider>
   )
 }
 

@@ -3,7 +3,26 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Building2, Check, ChevronsUpDown, FileText, Gauge, LogOut, Mail, MessageSquareText, Package, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import {
+  Building2,
+  Check,
+  ChevronsUpDown,
+  FileText,
+  Gauge,
+  LogOut,
+  Mail,
+  MessageSquareText,
+  Package,
+  UserSearch,
+  FolderPlus,
+  Inbox,
+  KeyRound,
+  PanelLeftClose,
+  Settings,
+  Target,
+  UserCog,
+  Users,
+} from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -19,6 +38,7 @@ import {
   SidebarRail,
   useSidebar,
 } from "@/components/ui/sidebar"
+import { ChangePasswordDialog } from "@/components/change-password-dialog"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { WorkspaceDialog } from "@/components/users/workspace-dialog"
 import {
@@ -81,7 +101,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader className="gap-3 px-2 pt-3">
-        <Link href="/icps" className="flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1 group-data-[collapsible=icon]:px-1">
+        <Link
+          href="/icps"
+          className="flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1 group-data-[collapsible=icon]:px-1"
+        >
           <Mark />
           <span className="sidebar-reveal truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground group-data-[collapsible=icon]:hidden">
             Outreacher
@@ -173,7 +196,9 @@ function WorkspaceSwitcher({ isAdmin }: { isAdmin: boolean }) {
           aria-label={`Workspace: ${label}. Switch workspace`}
         >
           <span className="text-muted-foreground">Workspace</span>
-          <span className={cn("ml-auto truncate font-medium", current ? "text-foreground" : "text-muted-foreground")}>{label}</span>
+          <span className={cn("ml-auto truncate font-medium", current ? "text-foreground" : "text-muted-foreground")}>
+            {label}
+          </span>
           <ChevronsUpDown className="size-3.5 flex-none text-muted-foreground" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-56">
@@ -199,9 +224,7 @@ function WorkspaceSwitcher({ isAdmin }: { isAdmin: boolean }) {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-      {creating && (
-        <WorkspaceDialog onClose={() => setCreating(false)} onCreated={(ws) => setCurrentWorkspace(ws.id)} />
-      )}
+      {creating && <WorkspaceDialog onClose={() => setCreating(false)} onCreated={(ws) => setCurrentWorkspace(ws.id)} />}
     </>
   )
 }
@@ -215,7 +238,12 @@ function CollapseToggle() {
   const label = !collapsed ? "Collapse sidebar" : peek ? "Keep sidebar open" : "Expand sidebar"
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton onClick={toggleSidebar} aria-expanded={!collapsed} tooltip={`${label} (Ctrl/⌘ B)`} className="h-8 text-[14px]">
+      <SidebarMenuButton
+        onClick={toggleSidebar}
+        aria-expanded={!collapsed}
+        tooltip={`${label} (Ctrl/⌘ B)`}
+        className="h-8 text-[14px]"
+      >
         <PanelLeftClose
           className={cn(
             "text-muted-foreground transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
@@ -228,22 +256,32 @@ function CollapseToggle() {
   )
 }
 
-/** Who's signed in, and a way out. */
+/** Who's signed in: change the password, or sign out. */
 function SignOut() {
-  const { me, signOut } = useAuth()
+  const { me, session, signOut } = useAuth()
+  const [changing, setChanging] = useState(false)
   return (
-    <SidebarMenuItem>
-      <SidebarMenuButton
-        tooltip={me ? `Sign out ${me.email}` : "Sign out"}
-        className="h-auto py-1.5 text-[14px]"
-        onClick={() => void signOut()}
-      >
-        <LogOut className="text-muted-foreground" />
-        <span className="min-w-0">
-          <span className="block">Sign out</span>
-          {me && <span className="block truncate text-xs text-muted-foreground">{me.email}</span>}
-        </span>
-      </SidebarMenuButton>
-    </SidebarMenuItem>
+    <>
+      <SidebarMenuItem>
+        <SidebarMenuButton tooltip="Change password" className="h-8 text-[14px]" onClick={() => setChanging(true)}>
+          <KeyRound className="text-muted-foreground" />
+          <span>Change password</span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+      {changing && <ChangePasswordDialog email={me?.email ?? session?.user.email ?? ""} onClose={() => setChanging(false)} />}
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          tooltip={me ? `Sign out ${me.email}` : "Sign out"}
+          className="h-auto py-1.5 text-[14px]"
+          onClick={() => void signOut()}
+        >
+          <LogOut className="text-muted-foreground" />
+          <span className="min-w-0">
+            <span className="block">Sign out</span>
+            {me && <span className="block truncate text-xs text-muted-foreground">{me.email}</span>}
+          </span>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </>
   )
 }
