@@ -1,26 +1,22 @@
 import { cn } from "@/lib/utils"
 
-/** The Coldbrew mark: an envelope of ice, sealed with a drop of coffee. Same drawing as app/icon.svg (the favicon). */
+/** The Coldbrew mark: ripples spreading from one centre, and one message leaving them. Its colours
+ *  follow the theme (--logo-* in globals.css). app/icon.svg is the same drawing for the browser tab. */
 export function ColdbrewMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 64" className={cn("size-6 shrink-0", className)} aria-hidden>
-      <rect width="64" height="64" rx="15" fill="#21160f" />
-      <rect x="9" y="16" width="46" height="33" rx="6" fill="#d4f0f8" />
-      <path d="M14 21.5 h6" stroke="#ffffff" strokeWidth="2.6" strokeLinecap="round" />
+      <circle cx="32" cy="32" r="30" fill="var(--logo-disc)" />
+      <path d="M44.6 25.5 A14 14 0 1 1 39 19.9" fill="none" stroke="var(--logo-ring)" strokeWidth="3.6" strokeLinecap="round" />
       <path
-        d="M11.5 19 L32 35 L52.5 19"
+        d="M51.3 21.5 A22 22 0 1 1 44.2 13.4"
         fill="none"
-        stroke="#9fd2e0"
-        strokeWidth="3.2"
+        stroke="var(--logo-ring-outer)"
+        strokeWidth="2.6"
         strokeLinecap="round"
-        strokeLinejoin="round"
+        opacity=".6"
       />
-      <path
-        d="M32 27.5 C29.6 31.4 26.4 34.6 26.4 38.6 a5.6 5.6 0 0 0 11.2 0 C37.6 34.6 34.4 31.4 32 27.5 Z"
-        fill="#7a4a2c"
-        stroke="#21160f"
-        strokeWidth="2.2"
-      />
+      <circle cx="32" cy="32" r="5" fill="var(--logo-centre)" />
+      <circle cx="50" cy="14" r="4.5" fill="var(--logo-dot)" />
     </svg>
   )
 }

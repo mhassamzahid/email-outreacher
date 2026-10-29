@@ -2,7 +2,7 @@ import { Pill, type PillTone } from "@/components/status"
 import type { CompanySource, PipelineStatus } from "@/lib/api"
 
 const STATUS: Record<PipelineStatus, { label: string; tone: PillTone }> = {
-  found: { label: "To research", tone: "neutral" },
+  found: { label: "To research", tone: "info" },
   qualified: { label: "Qualified", tone: "positive" },
   not_fit: { label: "Not a fit", tone: "negative" },
   error: { label: "Couldn't finish", tone: "warning" },

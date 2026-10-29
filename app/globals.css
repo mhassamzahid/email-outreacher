@@ -49,117 +49,130 @@
 }
 
 /*
- * Framed sheet. The sidebar and window ground form one teal-grey frame; the work sits on a white
- * sheet inset 8px with a 1px edge and no shadow. Colour belongs to data (--data, the one hue) and
- * status pills; chrome stays grey, and the one primary action is near-black.
+ * Framed sheet. The sidebar and window ground form one frame; the work sits on a sheet inset 8px with
+ * a 1px edge and no shadow. Light: white and indigo-tinted slate with one indigo accent. Dark:
+ * midnight with violet-tinted surfaces and one electric-violet accent. Sun yellow is the highlight
+ * in both, and charts get a hue per series. Colour belongs to data (--data) and status pills; green, red and
+ * amber keep meaning good, bad and warning in both.
  */
 :root {
-  --frame: #f2f5f5;
+  --frame: #f0f1fc;
   --background: #ffffff;
-  --foreground: #131416;
+  --foreground: #0f1222;
   --card: #ffffff;
-  --card-foreground: #131416;
+  --card-foreground: #0f1222;
   --popover: #ffffff;
-  --popover-foreground: #131416;
-  --primary: #131416;
+  --popover-foreground: #0f1222;
+  --primary: #4f46e5;
   --primary-foreground: #ffffff;
-  --secondary: #ebedee;
-  --secondary-foreground: #131416;
-  --muted: #f4f6f8;
-  --muted-foreground: #5d5f60;
-  --accent: #ebedee;
-  --accent-foreground: #131416;
+  --secondary: #f1f2f9;
+  --secondary-foreground: #0f1222;
+  --muted: #f6f7fc;
+  --muted-foreground: #5b6078;
+  --accent: #eef0fb;
+  --accent-foreground: #1e1b4b;
   --destructive: #c4242a;
-  --border: #e8eaec;
-  --rule: #f0f1f2;
-  --input: #cdced1;
-  --ring: #1b6c80;
+  --border: #e5e7f1;
+  --rule: #eff0f7;
+  --input: #cfd3e3;
+  --ring: #6366f1;
 
-  --data: #1b6c80;
-  --data-mid: #6fa8b6;
-  --data-soft: #d5e7eb;
-  /* Sign-in panel: the data teal, deepened. */
-  --login-panel: #0f3b46;
-  --login-ink: #eef7f9;
-  --login-line: #8cc9d6;
-  --login-signal: #b8f0fb;
+  --data: #4f46e5;
+  --data-mid: #a5b4fc;
+  --data-soft: #e0e7ff;
+  /* Sign-in panel. */
+  --login-panel: #1e1b4b;
+  --login-ink: #eef0ff;
+  --login-line: #a5b4fc;
+  --login-signal: #fde047;
   --positive: #1e7b4f;
   --negative: #c4242a;
   --warning: #92400e;
   --pill-positive-bg: #dcfae5;  --pill-positive-ink: #04250e;
   --pill-negative-bg: #ffedea;  --pill-negative-ink: #831c1e;
   --pill-warning-bg: #fffbeb;   --pill-warning-ink: #92400e;
-  --pill-info-bg: #e3f0f3;      --pill-info-ink: #0f4654;
-  --pill-neutral-bg: #ebedee;   --pill-neutral-ink: #353736;
+  --pill-info-bg: #e0e7ff;      --pill-info-ink: #3730a3;
+  --pill-neutral-bg: #f1f2f9;   --pill-neutral-ink: #3f4360;
 
-  --chart-1: #1b6c80;
-  --chart-2: #2f70bb;
-  --chart-3: #a86f0c;
-  --chart-4: #5d5f60;
-  --chart-5: #cdced1;
+  --chart-1: #4f46e5;
+  --chart-2: #0ea5e9;
+  --chart-3: #f59e0b;
+  --chart-4: #10b981;
+  --chart-5: #f43f5e;
   --radius: 0.5rem;
   --sidebar: var(--frame);
-  --sidebar-foreground: #3f4142;
-  --sidebar-primary: #131416;
+  --sidebar-foreground: #3f4360;
+  --sidebar-primary: #4f46e5;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e3e7e8;
-  --sidebar-accent-foreground: #131416;
-  --sidebar-border: #e3e7e8;
-  --sidebar-ring: #1b6c80;
+  --sidebar-accent: #e2e4fd;
+  --sidebar-accent-foreground: #3730a3;
+  --sidebar-border: #e2e4fd;
+  --sidebar-ring: #6366f1;
+  /* The logo (components/coldbrew-mark.tsx): it follows the theme. */
+  --logo-disc: #4338ca;
+  --logo-ring: #ffffff;
+  --logo-ring-outer: #a5b4fc;
+  --logo-centre: #fde047;
+  --logo-dot: #fde047;
 }
 
 .dark {
   /* Surface ladder and ink tiers after Linear (awesome-design-md): canvas, panel, lift, hairlines. */
-  --frame: #08090a;
-  --background: #0f1011;
-  --foreground: #f7f8f8;
-  --card: #0f1011;
-  --card-foreground: #f7f8f8;
-  --popover: #18191a;
-  --popover-foreground: #f7f8f8;
-  --primary: #f7f8f8;
-  --primary-foreground: #131416;
-  --secondary: #18191a;
-  --secondary-foreground: #f7f8f8;
-  --muted: #141516;
-  --muted-foreground: #9a9fa8;
-  --accent: #18191a;
-  --accent-foreground: #f7f8f8;
+  --frame: #0e0b1c;
+  --background: #0b0a14;
+  --foreground: #f2f1f8;
+  --card: #0b0a14;
+  --card-foreground: #f2f1f8;
+  --popover: #17132b;
+  --popover-foreground: #f2f1f8;
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+  --secondary: #18142c;
+  --secondary-foreground: #f2f1f8;
+  --muted: #130f24;
+  --muted-foreground: #a29dbd;
+  --accent: #1f1838;
+  --accent-foreground: #f2f0fb;
   --destructive: #e5566f;
-  --border: #23252a;
-  --rule: #1a1b1e;
-  --input: #34343a;
-  --ring: #5bb5c9;
+  --border: #2a2445;
+  --rule: #1b1631;
+  --input: #3a3260;
+  --ring: #8b5cf6;
 
-  --data: #5bb5c9;
-  --data-mid: #2f7484;
-  --data-soft: #285a66;
-  --login-panel: #0b2a31;
-  --login-ink: #e6f3f6;
-  --login-line: #5bb5c9;
-  --login-signal: #a6ecf9;
+  --data: #a78bfa;
+  --data-mid: #7c5ce6;
+  --data-soft: #2e2357;
+  --login-panel: #0e0b1c;
+  --login-ink: #f2f1f8;
+  --login-line: #8b5cf6;
+  --login-signal: #fde047;
   --positive: #3fc07a;
   --negative: #e5566f;
   --warning: #f0b45a;
   --pill-positive-bg: #172a1d;  --pill-positive-ink: #5fd394;
   --pill-negative-bg: #2c1a20;  --pill-negative-ink: #f07a8e;
   --pill-warning-bg: #2a2111;   --pill-warning-ink: #f0b45a;
-  --pill-info-bg: #163036;      --pill-info-ink: #8fd3e2;
-  --pill-neutral-bg: #18191a;   --pill-neutral-ink: #d0d6e0;
+  --pill-info-bg: #261d4a;      --pill-info-ink: #c9b8ff;
+  --pill-neutral-bg: #18142c;   --pill-neutral-ink: #d8d4ec;
 
-  --chart-1: #5bb5c9;
-  --chart-2: #6ea2e0;
-  --chart-3: #d79a31;
-  --chart-4: #949494;
-  --chart-5: #3d4042;
+  --chart-1: #a78bfa;
+  --chart-2: #38bdf8;
+  --chart-3: #fbbf24;
+  --chart-4: #34d399;
+  --chart-5: #fb7185;
   --sidebar: var(--frame);
-  --sidebar-foreground: #9a9fa8;
-  --sidebar-primary: #f4f4f4;
-  --sidebar-primary-foreground: #131416;
-  --sidebar-accent: #141516;
-  --sidebar-accent-foreground: #f7f8f8;
-  --sidebar-border: #141516;
-  --sidebar-ring: #5bb5c9;
+  --sidebar-foreground: #a29dbd;
+  --sidebar-primary: #7c3aed;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #241b45;
+  --sidebar-accent-foreground: #ddd0ff;
+  --sidebar-border: #1f1838;
+  --sidebar-ring: #8b5cf6;
+  --logo-disc: #0a0a12;
+  --logo-ring: #8b5cf6;
+  --logo-ring-outer: #8b5cf6;
+  --logo-centre: #fde047;
+  --logo-dot: #fde047;
 }
 
 @theme inline {
