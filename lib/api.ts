@@ -284,12 +284,15 @@ export const fetchLeadPosts = (
 
 export type PipelineStatus = "found" | "qualified" | "not_fit" | "error"
 
+export type CompanySource = "lead_intel" | "apollo" | "google_maps"
+
 export interface PipelineCompany {
   id: string
   icpId: string | null
-  source: "lead_intel" | "apollo"
+  source: CompanySource
   leadIntelBusinessId: string | null
   apolloOrgId: string | null
+  googlePlaceId: string | null
   name: string
   domain: string | null
   websiteUrl: string | null
@@ -299,6 +302,7 @@ export interface PipelineCompany {
   instagramUrl: string | null
   city: string | null
   state: string | null
+  phone: string | null
   status: PipelineStatus
   statusReason: string | null
   overridden: boolean
@@ -330,6 +334,10 @@ export interface SourceFindResult {
   upgraded: number
   totalAvailable: number | null
   error: string | null
+  /** Google Maps: requests made, what they cost, and anything worth knowing about the run. */
+  searches?: number | null
+  costUsd?: number | null
+  notes?: string[]
 }
 
 export const fetchPipeline = (workspaceId: string, icpId?: string) =>
@@ -339,12 +347,18 @@ export const findCompanies = (
   workspaceId: string,
   body: {
     icpId: string
-    sources: ("lead_intel" | "apollo")[]
+    sources: CompanySource[]
     /** Only these of the ICP's Lead Intel companies; all of them when left out. */
     leadIntelIds?: string[]
     apollo?: { keywords: string[]; locations: string[]; employeeRanges: string[]; page: number; perPage: number }
+    googleMaps?: { searchTerms: string[]; locations: string[]; radiusMiles: number; maxSearches: number }
   },
-) => api<{ leadIntel: SourceFindResult | null; apollo: SourceFindResult | null }>("/pipeline/find", { workspaceId, method: "POST", body })
+) =>
+  api<{ leadIntel: SourceFindResult | null; apollo: SourceFindResult | null; googleMaps: SourceFindResult | null }>("/pipeline/find", {
+    workspaceId,
+    method: "POST",
+    body,
+  })
 
 export const researchCompanies = (workspaceId: string, companyIds: string[], force = false) =>
   api<{ researched: number; skipped: number; qualified: number; notFit: number; errors: number; costUsd: number; notes: string[] }>(
@@ -362,7 +376,7 @@ export const findPipelineStakeholders = (
 
 // ---------- Usage: what Claude, Apollo and Apify have cost ----------
 
-export type UsageProvider = "claude" | "apollo" | "apify"
+export type UsageProvider = "claude" | "apollo" | "apify" | "google_places"
 
 export interface UsageTotals {
   calls: number

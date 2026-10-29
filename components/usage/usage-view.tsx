@@ -16,6 +16,7 @@ const PROVIDERS: { id: UsageProvider; label: string; unit: string }[] = [
   { id: "claude", label: "Claude API", unit: "tokens" },
   { id: "apollo", label: "Apollo", unit: "credits" },
   { id: "apify", label: "Apify", unit: "dollars" },
+  { id: "google_places", label: "Google Maps", unit: "dollars" },
 ]
 const PERIODS = [
   { value: "7", label: "Last 7 days" },
@@ -28,6 +29,7 @@ const ENDPOINT_ACTION: Record<string, string> = {
   "mixed_people/api_search": "Find stakeholders",
   "people/match": "Reveal email",
   "mixed_companies/search": "Find companies",
+  "places:searchText": "Find companies",
 }
 
 const EMPTY: UsageTotals = { calls: 0, failed: 0, credits: 0, costUsd: 0, inputTokens: 0, outputTokens: 0 }
@@ -45,7 +47,7 @@ function spend(provider: string, t: Pick<UsageTotals, "credits" | "costUsd" | "i
 export function UsageView() {
   return (
     <>
-      <PageHeader title="Usage" description="Tokens, credits and dollars spent with Claude, Apollo and Apify, and which action spent them." />
+      <PageHeader title="Usage" description="Tokens, credits and dollars spent with Claude, Apollo, Apify and Google Maps, and which action spent them." />
       <div className="space-y-6 px-4 pb-10 md:px-8">
         <WorkspaceGate>{(wsId) => <UsageReport key={wsId} wsId={wsId} />}</WorkspaceGate>
       </div>

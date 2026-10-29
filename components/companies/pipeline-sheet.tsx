@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react"
 import { AtSign, Check, ExternalLink, Globe, Sparkles, UserSearch, X } from "lucide-react"
-import { StatusPill } from "@/components/companies/pipeline-cells"
+import { SOURCE_NAME, StatusPill } from "@/components/companies/pipeline-cells"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -111,7 +111,7 @@ export function PipelineSheet({
         <SheetHeader className="px-5 pt-5 pb-4">
           <SheetTitle className="text-lg">{company.name}</SheetTitle>
           <SheetDescription>
-            {company.domain ?? "No website"} · {company.source === "lead_intel" ? "from Lead Intel" : "from Apollo"}
+            {company.domain ?? "No website"} · from {SOURCE_NAME[company.source]}
             {company.researchedAt ? ` · researched ${shortDate(company.researchedAt)}` : ""}
           </SheetDescription>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -221,7 +221,7 @@ export function PipelineSheet({
           ) : (
             <p className="text-[13px] text-muted-foreground">Couldn&apos;t read it: {site.detail ?? site.outcome.replaceAll("_", " ")}</p>
           )}
-          {company.source === "apollo" && company.researchedAt && <StoredContent workspaceId={workspaceId} companyId={company.id} />}
+          {company.source !== "lead_intel" && company.researchedAt && <StoredContent workspaceId={workspaceId} companyId={company.id} />}
         </Section>
 
         <Section title="Instagram and socials" icon={AtSign}>

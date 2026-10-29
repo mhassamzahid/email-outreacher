@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Building2, Download, FlaskConical, Search, UserSearch } from "lucide-react"
+import { Building2, Download, FlaskConical, MapPin, Search, UserSearch } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
 import { ApolloSearchDialog } from "@/components/companies/apollo-search-dialog"
+import { GoogleMapsSearchDialog } from "@/components/companies/google-maps-search-dialog"
 import { FindStakeholdersDialog } from "@/components/companies/find-stakeholders-dialog"
 import { LeadIntelImportDialog } from "@/components/companies/lead-intel-import-dialog"
 import { SourcePill, StatusPill } from "@/components/companies/pipeline-cells"
@@ -27,6 +28,7 @@ import {
   researchCompanies,
   setCompanyStatus,
   useApi,
+  type CompanySource,
 } from "@/lib/api"
 import { formatUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -40,7 +42,7 @@ const FILTERS: { value: "all" | PipelineStatus; label: string }[] = [
   { value: "error", label: "Couldn't finish" },
 ]
 
-const needsResearch = (c: PipelineCompany) => c.source === "apollo" && (c.status === "found" || c.status === "error")
+const needsResearch = (c: PipelineCompany) => c.source !== "lead_intel" && (c.status === "found" || c.status === "error")
 
 /** The company pipeline, for every ICP or one: find, research and score, then find stakeholders at the qualified ones. */
 export function CompaniesView({ initialIcp }: { initialIcp: string }) {
@@ -68,7 +70,7 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
   const [filter, setFilter] = useState<"all" | PipelineStatus>("all")
   const [query, setQuery] = useState("")
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [finding, setFinding] = useState<"lead_intel" | "apollo" | null>(null)
+  const [finding, setFinding] = useState<CompanySource | null>(null)
   const [stakeholdersFor, setStakeholdersFor] = useState<PipelineCompany[] | null>(null)
   const [open, setOpen] = useState<PipelineCompany | null>(null)
   const [busy, setBusy] = useState("")
@@ -165,6 +167,9 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
           <Button variant="outline" onClick={() => setFinding("lead_intel")}>
             <Download /> Import from Lead Intel
           </Button>
+          <Button variant="outline" onClick={() => setFinding("google_maps")}>
+            <MapPin /> Search Google Maps
+          </Button>
           <Button onClick={() => setFinding("apollo")}>
             <Search /> Search Apollo
           </Button>
@@ -217,11 +222,14 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
         <EmptyState
           icon={Building2}
           title={activeIcp ? `No companies for ${activeIcp.name} yet` : "No companies yet"}
-          description="Import companies Lead Intel matched to an ICP (already verified), or search Apollo (researched and scored next)."
+          description="Import companies Lead Intel matched to an ICP (already verified), or search Google Maps or Apollo (researched and scored next)."
           action={
             <div className="flex flex-wrap justify-center gap-2">
               <Button variant="outline" onClick={() => setFinding("lead_intel")}>
                 <Download /> Import from Lead Intel
+              </Button>
+              <Button variant="outline" onClick={() => setFinding("google_maps")}>
+                <MapPin /> Search Google Maps
               </Button>
               <Button onClick={() => setFinding("apollo")}>
                 <Search /> Search Apollo
@@ -305,6 +313,15 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
       )}
       {finding === "apollo" && (
         <ApolloSearchDialog
+          workspaceId={wsId}
+          icps={icps.data}
+          initialIcpId={dialogIcp}
+          onClose={() => setFinding(null)}
+          onFound={afterAdding}
+        />
+      )}
+      {finding === "google_maps" && (
+        <GoogleMapsSearchDialog
           workspaceId={wsId}
           icps={icps.data}
           initialIcpId={dialogIcp}
