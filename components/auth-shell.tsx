@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react"
+import { ColdbrewMark } from "@/components/coldbrew-mark"
 
 // The product mark, multiplied: nine open rings, each opening a little further round, and from each
 // gap a message leaving. One campaign fanning out to many people. Deterministic geometry, so the
@@ -67,11 +68,8 @@ export function AuthShell({ children }: { children: ReactNode }) {
         <div className="absolute inset-x-0 bottom-0 -z-[5] hidden h-1/2 bg-gradient-to-t from-[var(--login-panel)] via-[var(--login-panel)]/70 to-transparent lg:block" />
 
         <div className="flex items-center gap-2.5">
-          <svg viewBox="0 0 24 24" className="size-6" aria-hidden>
-            <path d="M19.5 9.2A8 8 0 1 0 20 12" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
-            <circle cx="20.2" cy="5.6" r="2.4" fill="currentColor" />
-          </svg>
-          <span className="text-[15px] font-semibold tracking-[-0.01em]">Outreacher</span>
+          <ColdbrewMark className="size-7" />
+          <span className="text-[15px] font-semibold tracking-[-0.01em]">Coldbrew</span>
         </div>
         <p className="hidden max-w-[18ch] text-[44px] leading-[1.05] font-medium tracking-[-0.03em] text-balance lg:block">
           One message, written for each person.

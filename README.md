@@ -1,4 +1,4 @@
-# Outreacher (frontend prototype)
+# Coldbrew (frontend)
 
 Personalized cold email dashboard: define ICPs, import leads, enrich them with recent posts and website content, and generate one email per lead from editable, versioned prompts.
 

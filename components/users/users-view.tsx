@@ -330,7 +330,7 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
         onOpenChange={(o) => !o && setRemoving(null)}
         destructive
         title={removing ? `Remove ${removing.name}?` : ""}
-        description="They lose access to Outreacher. Their Supabase account stays (Lead Intel shares it), so if they sign in again they come back as Sales with no workspaces. To keep them out, deactivate instead."
+        description="They lose access to Coldbrew. Their Supabase account stays (Lead Intel shares it), so if they sign in again they come back as Sales with no workspaces. To keep them out, deactivate instead."
         confirmLabel="Remove user"
         onConfirm={() => {
           if (!removing) return

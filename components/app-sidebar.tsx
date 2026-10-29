@@ -39,6 +39,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { ChangePasswordDialog } from "@/components/change-password-dialog"
+import { ColdbrewMark } from "@/components/coldbrew-mark"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { WorkspaceDialog } from "@/components/users/workspace-dialog"
 import {
@@ -54,16 +55,6 @@ import { useAuth } from "@/lib/auth"
 import { formatUsd } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
-
-/** The product mark: an open ring with one message leaving it. */
-function Mark() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-6 shrink-0" aria-hidden>
-      <path d="M19.5 9.2A8 8 0 1 0 20 12" fill="none" stroke="var(--data)" strokeWidth="2.6" strokeLinecap="round" />
-      <circle cx="20.2" cy="5.6" r="2.4" fill="var(--data)" />
-    </svg>
-  )
-}
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -105,9 +96,9 @@ export function AppSidebar() {
           href="/icps"
           className="flex min-w-0 items-center gap-2.5 rounded-md px-1.5 py-1 group-data-[collapsible=icon]:px-1"
         >
-          <Mark />
+          <ColdbrewMark />
           <span className="sidebar-reveal truncate text-[15px] font-semibold tracking-[-0.01em] text-foreground group-data-[collapsible=icon]:hidden">
-            Outreacher
+            Coldbrew
           </span>
         </Link>
         <WorkspaceSwitcher isAdmin={isAdmin} />

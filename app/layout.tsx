@@ -21,7 +21,7 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Outreacher",
+  title: "Coldbrew",
   description: "Personalized cold email from ICPs, enrichment and editable prompts",
 };
 
