@@ -1,7 +1,8 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Source, Workspace } from "./types"
+import { accessToken, supabase } from "./supabase"
+import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, Source, User, Workspace } from "./types"
 
 // The backend. Pages fetch on mount and show their own loading and error states.
 
@@ -21,11 +22,13 @@ export async function api<T>(
   path: string,
   opts: { workspaceId?: string | null; method?: string; body?: unknown; csv?: string } = {},
 ): Promise<T> {
+  const token = await accessToken()
   let res: Response
   try {
     res = await fetch(`${API_URL}/api/v1${path}`, {
       method: opts.method ?? "GET",
       headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
         ...(opts.body !== undefined && { "Content-Type": "application/json" }),
         ...(opts.csv !== undefined && { "Content-Type": "text/csv" }),
         ...(opts.workspaceId && { "X-Workspace-Id": opts.workspaceId }),
@@ -36,6 +39,8 @@ export async function api<T>(
     throw new ApiError(`Can't reach the backend at ${API_URL}. Is it running?`, 0)
   }
   if (res.status === 204) return undefined as T
+  // The session is gone or no longer valid: sign out, which sends the app back to the sign-in page.
+  if (res.status === 401) void supabase.auth.signOut()
   if (!res.ok) {
     const detail = await res.json().then((b) => b?.detail).catch(() => null)
     throw new ApiError(typeof detail === "string" ? detail : `The backend answered ${res.status}.`, res.status)
@@ -172,6 +177,27 @@ export const updateWorkspace = (id: string, body: Partial<Pick<Workspace, "name"
   api<Workspace>(`/workspaces/${id}`, { method: "PATCH", body })
 
 export const deleteWorkspace = (id: string) => api<void>(`/workspaces/${id}`, { method: "DELETE" })
+
+/** Exactly these people can open the workspace (admins open every one anyway). */
+export const setWorkspaceMembersApi = (id: string, userIds: string[]) =>
+  api<void>(`/workspaces/${id}/members`, { method: "PUT", body: { userIds } })
+
+// ---------- Users: role and workspaces here; accounts and passwords in Supabase ----------
+
+export const fetchMe = () => api<User>("/me")
+
+/** Admins only. */
+export const fetchUsers = () => api<User[]>("/users")
+
+export const addUserApi = (body: { name: string; email: string; role: Role; workspaceIds: string[] }) =>
+  api<User>("/users", { method: "POST", body })
+
+export const updateUserApi = (
+  id: string,
+  body: Partial<{ name: string; role: Role; status: "active" | "deactivated"; workspaceIds: string[] }>,
+) => api<User>(`/users/${id}`, { method: "PATCH", body })
+
+export const removeUserApi = (id: string) => api<void>(`/users/${id}`, { method: "DELETE" })
 
 // ---------- Stakeholders (Apollo) ----------
 
@@ -565,7 +591,20 @@ export const saveResearchSettings = (workspaceId: string, body: ResearchSettings
 
 // ---------- People added by hand or from a CSV (Apollo's export format) ----------
 
-export const PEOPLE_TEMPLATE_URL = `${API_URL}/api/v1/stakeholders/template.csv`
+/** Save one of the backend's CSV templates. Fetched with the session, so it isn't a plain link. */
+export async function downloadTemplate(kind: "people" | "leads") {
+  const token = await accessToken()
+  const res = await fetch(`${API_URL}/api/v1/${kind === "people" ? "stakeholders" : "leads"}/template.csv`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) throw new ApiError(`Couldn't get the template (${res.status}).`, res.status)
+  const blob = await res.blob()
+  const link = document.createElement("a")
+  link.href = URL.createObjectURL(blob)
+  link.download = `${kind}-template.csv`
+  link.click()
+  URL.revokeObjectURL(link.href)
+}
 
 export interface PersonInput {
   icpId: string | null
@@ -754,7 +793,6 @@ export const deleteLeadsApi = (workspaceId: string, leadIds: string[]) =>
 export const moveLeadsApi = (workspaceId: string, leadIds: string[], icpId: string) =>
   api<{ changed: number }>("/leads/move", { workspaceId, method: "POST", body: { leadIds, icpId } })
 
-export const LEADS_TEMPLATE_URL = `${API_URL}/api/v1/leads/template.csv`
 
 export interface LeadImportResult {
   dryRun: boolean

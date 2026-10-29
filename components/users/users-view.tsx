@@ -8,7 +8,6 @@ import {
   MoreHorizontal,
   PencilLine,
   Search,
-  Send,
   Trash2,
   UserCheck,
   UserMinus,
@@ -74,7 +73,7 @@ export function UsersView({ initialTab }: { initialTab: UsersTab }) {
     <>
       <PageHeader
         title="Users"
-        description={`${users.length} users across ${workspaces.length} workspaces${pending ? ` · ${pending} invite${pending === 1 ? "" : "s"} pending` : ""}. You're in ${current?.name}.`}
+        description={`${users.length} users across ${workspaces.length} workspaces${pending ? ` · ${pending} not signed in yet` : ""}. You're in ${current?.name}.`}
         actions={
           tab === "workspaces" ? (
             <Button onClick={() => setCreatingWorkspace(true)}>
@@ -82,7 +81,7 @@ export function UsersView({ initialTab }: { initialTab: UsersTab }) {
             </Button>
           ) : (
             <Button onClick={() => setInviting(true)}>
-              <UserPlus /> Invite user
+              <UserPlus /> Add user
             </Button>
           )
         }
@@ -179,7 +178,7 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
         <EmptyState
           icon={UsersIcon}
           title={users.length ? "No users match" : "No users yet"}
-          description={users.length ? "Try another name, email or role." : "Invite your team to review and send drafts."}
+          description={users.length ? "Try another name, email or role." : "Add your team to review and send drafts."}
           action={
             users.length ? (
               <Button
@@ -193,7 +192,7 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
               </Button>
             ) : (
               <Button onClick={onInvite}>
-                <UserPlus /> Invite user
+                <UserPlus /> Add user
               </Button>
             )
           }
@@ -287,11 +286,6 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
                           <DropdownMenuItem onSelect={() => setEditing({ user: u })}>
                             <PencilLine /> Edit role and workspaces
                           </DropdownMenuItem>
-                          {u.status === "invited" && (
-                            <DropdownMenuItem onSelect={() => toast.success(`Invite sent again to ${u.email}`)}>
-                              <Send /> Resend invite
-                            </DropdownMenuItem>
-                          )}
                           {u.status === "deactivated" ? (
                             <DropdownMenuItem
                               onSelect={() => {
@@ -316,7 +310,7 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
                           )}
                           <DropdownMenuSeparator />
                           <DropdownMenuItem variant="destructive" disabled={!!locked} onSelect={() => setRemoving(u)}>
-                            <Trash2 /> {u.status === "invited" ? "Cancel invite" : "Remove user"}
+                            <Trash2 /> Remove user
                           </DropdownMenuItem>
                           {locked && <p className="px-2 pb-1.5 text-xs text-muted-foreground">{locked}</p>}
                         </DropdownMenuContent>
@@ -335,17 +329,13 @@ function UsersTable({ onInvite }: { onInvite: () => void }) {
         open={!!removing}
         onOpenChange={(o) => !o && setRemoving(null)}
         destructive
-        title={removing ? (removing.status === "invited" ? `Cancel ${removing.name}'s invite?` : `Remove ${removing.name}?`) : ""}
-        description={
-          removing?.status === "invited"
-            ? "The invite link stops working. You can invite them again later."
-            : "They lose access to every workspace. Drafts they edited and emails they sent are kept. To keep them on file, deactivate instead."
-        }
-        confirmLabel={removing?.status === "invited" ? "Cancel invite" : "Remove user"}
+        title={removing ? `Remove ${removing.name}?` : ""}
+        description="They lose access to Outreacher. Their Supabase account stays (Lead Intel shares it), so if they sign in again they come back as Sales with no workspaces. To keep them out, deactivate instead."
+        confirmLabel="Remove user"
         onConfirm={() => {
           if (!removing) return
           removeUser(removing.id)
-          toast.success(removing.status === "invited" ? `Cancelled ${removing.name}'s invite` : `Removed ${removing.name}`)
+          toast.success(`Removed ${removing.name}`)
           setRemoving(null)
         }}
       />

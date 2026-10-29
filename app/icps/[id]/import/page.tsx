@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { useIcpParam } from "@/hooks/use-icp"
-import { LEADS_TEMPLATE_URL, importLeadsCsv, type LeadImportResult } from "@/lib/api"
+import { downloadTemplate, importLeadsCsv, type LeadImportResult } from "@/lib/api"
 import { parseCsv } from "@/lib/csv"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -137,10 +137,8 @@ export default function ImportPage() {
             <AlertTriangle className="size-4" /> {error}
           </p>
         )}
-        <Button variant="link" className="px-0" asChild>
-          <a href={LEADS_TEMPLATE_URL} download>
-            <Download /> Download template
-          </a>
+        <Button variant="link" className="px-0" onClick={() => void downloadTemplate("leads").catch((e) => toast.error(e.message))}>
+          <Download /> Download template
         </Button>
       </div>
     )

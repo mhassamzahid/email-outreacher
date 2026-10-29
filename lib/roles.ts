@@ -14,7 +14,7 @@ export const ROLE_DESCRIPTION: Record<Role, string> = {
 
 export const USER_STATUS_LABEL: Record<UserStatus, string> = {
   active: "Active",
-  invited: "Invited",
+  invited: "Not signed in yet",
   deactivated: "Deactivated",
 }
 

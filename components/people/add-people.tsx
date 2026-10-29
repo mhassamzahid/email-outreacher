@@ -12,7 +12,7 @@ import {
   type ApiIcp,
   type PeopleImportResult,
   type PersonInput,
-  PEOPLE_TEMPLATE_URL,
+  downloadTemplate,
   addPerson,
   importPeople,
 } from "@/lib/api"
@@ -236,10 +236,8 @@ export function ImportPeopleDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          <Button variant="outline" size="sm" asChild>
-            <a href={PEOPLE_TEMPLATE_URL} download>
-              <Download /> Download the template
-            </a>
+          <Button variant="outline" size="sm" onClick={() => void downloadTemplate("people").catch((e) => toast.error(e.message))}>
+            <Download /> Download the template
           </Button>
           <IcpPicker icps={icps} value={icp} onChange={setIcp} id="import-icp" />
           <div className="space-y-1.5">

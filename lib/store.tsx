@@ -1,12 +1,14 @@
 "use client"
 
 import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react"
+import { toast } from "sonner"
 import * as api from "./api"
-import { CURRENT_USER_ID, DEFAULT_SETTINGS, DEFAULT_USERS } from "./defaults"
+import { useAuth } from "./auth"
+import { DEFAULT_SETTINGS } from "./defaults"
 import type { ICP, IcpOutreach, Lead, PromptKind, PromptTemplate, PromptVersion, Settings, User, Workspace } from "./types"
 
-// App state shared across pages. Workspaces, ICPs, leads and prompts come from the backend. Settings
-// and users still live only in this browser until they're stored in the backend.
+// App state shared across pages, for the signed-in person. Workspaces, ICPs, leads, prompts and users
+// come from the backend; general settings still live only in this browser.
 
 const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 
@@ -70,7 +72,7 @@ interface Store {
   currentUserId: string
   currentWorkspaceId: string
   setCurrentWorkspace: (id: string) => void
-  /** Adds the person as "invited" (simulated: no email is sent). */
+  /** Adds the person by email, ready for their first sign-in. Their account is made in Supabase. */
   inviteUser: (input: Pick<User, "name" | "email" | "role" | "workspaceIds">) => User
   updateUser: (id: string, patch: Partial<Pick<User, "name" | "role" | "workspaceIds" | "status">>) => void
   removeUser: (id: string) => void
@@ -102,7 +104,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [promptsError, setPromptsError] = useState<string | null>(null)
   const [promptsTick, setPromptsTick] = useState(0)
   const [settings, setSettings] = useState(DEFAULT_SETTINGS)
-  const [users, setUsers] = useState(DEFAULT_USERS)
+  const { me } = useAuth()
+  // Admins see everyone (loaded below); anyone else only themselves.
+  const [allUsers, setUsers] = useState<User[]>([])
+  const users = me?.role === "admin" ? allUsers : me ? [me] : []
+  const [usersTick, setUsersTick] = useState(0)
   const [workspaces, setWorkspaces] = useState<Workspace[]>([])
   const [workspacesStatus, setWorkspacesStatus] = useState<Store["workspacesStatus"]>("loading")
   const [workspacesError, setWorkspacesError] = useState<string | null>(null)
@@ -145,6 +151,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       live = false
     }
   }, [workspacesTick])
+
+  const meId = me?.id
+  const meRole = me?.role
+  useEffect(() => {
+    if (!meId || meRole !== "admin") return
+    let live = true
+    api
+      .fetchUsers()
+      .then((list) => live && setUsers(list))
+      .catch((e: unknown) => live && toast.error("Couldn't load users", { description: e instanceof Error ? e.message : undefined }))
+    return () => {
+      live = false
+    }
+  }, [meId, meRole, usersTick])
+  const reloadUsers = () => setUsersTick((t) => t + 1)
+
+  /** A change already shown on screen: saved in the background; if the backend refuses, say why and reload. */
+  const save = (label: string, call: Promise<unknown>, then?: () => void) =>
+    call.then(then).catch((e: unknown) => {
+      toast.error(label, { description: e instanceof Error ? e.message : undefined })
+      reloadUsers()
+    })
 
   const reloadWorkspaces = useCallback(() => {
     setWorkspacesStatus("loading")
@@ -338,17 +366,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     }
     setUsers((list) => [...list, user])
+    void save("Couldn't add them", api.addUserApi(input), reloadUsers)
     return user
   }
 
-  const updateUser: Store["updateUser"] = (id, patch) =>
+  const updateUser: Store["updateUser"] = (id, patch) => {
     setUsers((list) => list.map((u) => (u.id === id ? { ...u, ...patch } : u)))
+    const { status, ...rest } = patch
+    void save("Couldn't save the change", api.updateUserApi(id, status === "invited" ? rest : { ...rest, ...(status && { status }) }))
+  }
 
-  const removeUser: Store["removeUser"] = (id) => setUsers((list) => list.filter((u) => u.id !== id))
+  const removeUser: Store["removeUser"] = (id) => {
+    setUsers((list) => list.filter((u) => u.id !== id))
+    void save("Couldn't remove them", api.removeUserApi(id))
+  }
 
   const createWorkspace: Store["createWorkspace"] = async ({ name, description, memberIds }) => {
     const ws = await api.createWorkspace({ name: name.trim(), description: description.trim() })
     setWorkspaces((list) => [...list, ws])
+    const members = memberIds.filter((id) => users.find((u) => u.id === id)?.role !== "admin")
+    if (members.length) void save("Couldn't add the members", api.setWorkspaceMembersApi(ws.id, members))
     // Admins see every workspace; everyone else only the ones they were added to.
     setUsers((list) =>
       list.map((u) => (u.role === "admin" || memberIds.includes(u.id) ? { ...u, workspaceIds: [...u.workspaceIds, ws.id] } : u)),
@@ -361,7 +398,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setWorkspaces((list) => list.map((w) => (w.id === id ? ws : w)))
   }
 
-  const setWorkspaceMembers: Store["setWorkspaceMembers"] = (id, memberIds) =>
+  const setWorkspaceMembers: Store["setWorkspaceMembers"] = (id, memberIds) => {
     setUsers((list) =>
       list.map((u) => {
         if (u.role === "admin") return u
@@ -369,6 +406,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return { ...u, workspaceIds: memberIds.includes(u.id) ? [...without, id] : without }
       }),
     )
+    const members = memberIds.filter((m) => users.find((u) => u.id === m)?.role !== "admin")
+    void save("Couldn't save the members", api.setWorkspaceMembersApi(id, members))
+  }
 
   const deleteWorkspace: Store["deleteWorkspace"] = async (id) => {
     await api.deleteWorkspace(id)
@@ -411,7 +451,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         workspacesStatus,
         workspacesError,
         reloadWorkspaces,
-        currentUserId: CURRENT_USER_ID,
+        currentUserId: me?.id ?? "",
         currentWorkspaceId,
         setCurrentWorkspace,
         inviteUser,

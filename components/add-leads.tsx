@@ -27,7 +27,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { LEADS_TEMPLATE_URL } from "@/lib/api"
+import { downloadTemplate } from "@/lib/api"
 import { EMAIL_PATTERN, fullName } from "@/lib/format"
 import { useStore } from "@/lib/store"
 
@@ -81,10 +81,8 @@ export function AddLeadsMenu({ icpId, variant = "outline" }: { icpId?: string; v
             <UserPlus /> Add manually
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <a href={LEADS_TEMPLATE_URL} download>
-              <Download /> Download CSV template
-            </a>
+          <DropdownMenuItem onSelect={() => void downloadTemplate("leads").catch((e) => toast.error(e.message))}>
+            <Download /> Download CSV template
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

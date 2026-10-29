@@ -13,7 +13,7 @@ import { ROLE_LABEL, otherActiveAdmins } from "@/lib/roles"
 import { useStore } from "@/lib/store"
 import type { Role, User } from "@/lib/types"
 
-/** Invite a new user, or edit an existing one's name, role and workspaces. */
+/** Add someone by email (their account is made in Supabase), or edit a user's name, role and workspaces. */
 export function UserDialog({ user, initialRole, onClose }: { user?: User; initialRole?: Role; onClose: () => void }) {
   const { users, workspaces, currentUserId, currentWorkspaceId, inviteUser, updateUser } = useStore()
   const [name, setName] = useState(user?.name ?? "")
@@ -59,7 +59,9 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
       toast.success(`Saved ${name.trim()}`)
     } else {
       inviteUser({ name, email, role, workspaceIds: ids })
-      toast.success(`Invited ${name.trim()}`, { description: "The invite email goes out once the backend is connected." })
+      toast.success(`Added ${name.trim()}`, {
+        description: "Now make their account in the Supabase dashboard (Authentication, Add user) with this email and a password.",
+      })
     }
     onClose()
   }
@@ -71,9 +73,11 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg!">
         <DialogHeader>
-          <DialogTitle>{user ? `Edit ${user.name}` : "Invite user"}</DialogTitle>
+          <DialogTitle>{user ? `Edit ${user.name}` : "Add user"}</DialogTitle>
           <DialogDescription>
-            {user ? "Change their role and which workspaces they can open." : "They get an email to set a password and sign in."}
+            {user
+              ? "Change their role and which workspaces they can open."
+              : "Their role and workspaces are ready for their first sign-in. Make their account, with a password, in the Supabase dashboard."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -163,7 +167,7 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
             Cancel
           </Button>
           <Button type="submit" form="user-form">
-            {user ? "Save changes" : "Send invite"}
+            {user ? "Save changes" : "Add user"}
           </Button>
         </DialogFooter>
       </DialogContent>

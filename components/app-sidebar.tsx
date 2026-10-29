@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useState, type CSSProperties } from "react"
-import { Building2, Check, ChevronsUpDown, FileText, Gauge, Mail, MessageSquareText, Package, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
+import { Building2, Check, ChevronsUpDown, FileText, Gauge, LogOut, Mail, MessageSquareText, Package, UserSearch, FolderPlus, Inbox, PanelLeftClose, Settings, Target, UserCog, Users } from "lucide-react"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { fetchEmails, fetchUsage, useApi } from "@/lib/api"
+import { useAuth } from "@/lib/auth"
 import { formatUsd } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
@@ -140,6 +141,7 @@ export function AppSidebar() {
         <SidebarMenu className="gap-0.5">
           <ThemeToggle />
           <CollapseToggle />
+          <SignOut />
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
@@ -221,6 +223,26 @@ function CollapseToggle() {
           )}
         />
         <span>{label}</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+/** Who's signed in, and a way out. */
+function SignOut() {
+  const { me, signOut } = useAuth()
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        tooltip={me ? `Sign out ${me.email}` : "Sign out"}
+        className="h-auto py-1.5 text-[14px]"
+        onClick={() => void signOut()}
+      >
+        <LogOut className="text-muted-foreground" />
+        <span className="min-w-0">
+          <span className="block">Sign out</span>
+          {me && <span className="block truncate text-xs text-muted-foreground">{me.email}</span>}
+        </span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

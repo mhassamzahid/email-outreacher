@@ -2,11 +2,10 @@ import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { cookies } from "next/headers";
 import { ThemeProvider } from "next-themes";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { AuthGate } from "@/components/auth-gate";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { StoreProvider } from "@/lib/store";
+import { AuthProvider } from "@/lib/auth";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({
@@ -39,14 +38,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="min-h-full">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <TooltipProvider>
-            <StoreProvider>
-              <SidebarProvider defaultOpen={sidebarOpen}>
-                <AppSidebar />
-                <SidebarInset className="min-w-0">
-                  {children}
-                </SidebarInset>
-              </SidebarProvider>
-            </StoreProvider>
+            <AuthProvider>
+              <AuthGate sidebarOpen={sidebarOpen}>{children}</AuthGate>
+            </AuthProvider>
           </TooltipProvider>
           <Toaster />
         </ThemeProvider>
