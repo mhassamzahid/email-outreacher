@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { AlertTriangle, Mails, RotateCw, Search, Sparkles } from "lucide-react"
+import { AlertTriangle, Mails, RotateCw, Search, Sparkles, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError } from "@/components/companies/backend-state"
 import { EmptyState } from "@/components/empty-state"
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { type Mailbox, type Mailboxes, fetchMailboxes, fetchSendingCampaigns, runFollowUps, useApi } from "@/lib/api"
+import { type Mailbox, type Mailboxes, fetchMailboxes, fetchSendingCampaigns, runFollowUps, syncCampaigns, useApi } from "@/lib/api"
 import { formatUsd, shortDate } from "@/lib/format"
 import { useStore } from "@/lib/store"
 
@@ -193,6 +193,27 @@ function CampaignsCard({ fallback }: { fallback: Mailboxes["campaigns"] }) {
   const [busy, setBusy] = useState(false)
   const rows = sending.data ?? fallback.map((c) => ({ ...c, id: c.name, queued: null as number | null }))
 
+  const setUp = async () => {
+    if (!currentWorkspaceId) return
+    setBusy(true)
+    const id = toast.loading("Checking every ICP has its campaign…")
+    try {
+      const r = await syncCampaigns(currentWorkspaceId)
+      const made = r.filter((x) => x.status === "created" || x.status === "renamed" || x.status === "linked")
+      const skipped = r.filter((x) => x.status === "skipped")
+      const say = made.length ? `${made.length} set up: ${made.map((x) => x.icp).join(", ")}.` : "Every ICP already had its campaign."
+      ;(skipped.length ? toast.warning : toast.success)(say, {
+        id,
+        description: skipped.length ? skipped.map((x) => `${x.icp}: ${x.note}`).join(" ") : "New campaigns are drafts and don't send until activated.",
+      })
+      sending.reload()
+    } catch (e) {
+      toast.error("Couldn't set up campaigns", { id, description: e instanceof Error ? e.message : undefined })
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const check = async () => {
     if (!currentWorkspaceId) return
     setBusy(true)
@@ -216,9 +237,14 @@ function CampaignsCard({ fallback }: { fallback: Mailboxes["campaigns"] }) {
       <div className="flex items-center gap-2">
         <h2 className="flex-1 text-[13px] text-muted-foreground">Campaigns</h2>
         {currentWorkspaceId && (
-          <Button size="sm" variant="ghost" className="-my-1" disabled={busy} onClick={() => void check()}>
-            <Sparkles /> Check follow-ups now
-          </Button>
+          <>
+            <Button size="sm" variant="ghost" className="-my-1" disabled={busy} onClick={() => void setUp()}>
+              <Wand2 /> Set up campaigns
+            </Button>
+            <Button size="sm" variant="ghost" className="-my-1" disabled={busy} onClick={() => void check()}>
+              <Sparkles /> Check follow-ups now
+            </Button>
+          </>
         )}
       </div>
       <ul className="mt-2 space-y-1.5">

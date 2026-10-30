@@ -33,10 +33,13 @@ export function EditIcpDefinition({ icp, onClose }: { icp: ICP; onClose: () => v
     if (!valid) return
     setSaving(true)
     try {
-      await updateIcpDefinition(icp.id, draft)
+      const { campaignNote } = await updateIcpDefinition(icp.id, draft)
       toast.success(`Saved ${draft.name.trim()}`, {
         description: "The next Google Maps or Apollo search, and the next research, use the new definition.",
       })
+      // Only worth a second toast when the campaign changed or couldn't be set up.
+      if (campaignNote && !campaignNote.startsWith("Its campaign is "))
+        (campaignNote.startsWith("Campaign not set up") ? toast.warning : toast.info)(campaignNote)
       onClose()
     } catch (e) {
       setServerError(e instanceof Error ? e.message : "Couldn't save it.")

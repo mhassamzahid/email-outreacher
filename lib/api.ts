@@ -111,6 +111,8 @@ export interface ApiIcp
     | "minReviews" | "places" | "companyCount" | "createdAt" | "updatedAt"
   > {
   profile: ApiIcpProfile | null
+  /** After a create or rename: what happened to its CheapSequencer campaign. */
+  campaignNote?: string | null
 }
 
 const EMPTY_OUTREACH: IcpOutreach = {
@@ -294,6 +296,15 @@ export interface FollowUpRun {
   costUsd: number
   notes: string[]
 }
+
+export interface CampaignSync {
+  icp: string
+  status: "created" | "renamed" | "linked" | "unchanged" | "skipped"
+  note: string
+}
+
+/** Give every ICP that's on its "Coldbrew: <ICP>" campaign: link, rename or create a draft copy. */
+export const syncCampaigns = (workspaceId: string) => api<CampaignSync[]>("/sending/campaigns/sync", { workspaceId, method: "POST" })
 
 export const runFollowUps = (workspaceId: string) => api<FollowUpRun>("/sending/follow-ups/run", { workspaceId, method: "POST" })
 

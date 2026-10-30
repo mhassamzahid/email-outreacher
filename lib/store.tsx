@@ -40,9 +40,10 @@ interface Store {
    * for it if any were given. Rejects with the backend's reason (e.g. a name that's taken) if the ICP
    * wasn't created. If it was but the outreach settings didn't save, resolves with a `warning`.
    */
-  createIcp: (input: api.IcpCreate, outreach?: Partial<IcpOutreach>) => Promise<{ icp: ICP; warning?: string }>
+  /** campaignNote: what happened to the ICP's CheapSequencer campaign. */
+  createIcp: (input: api.IcpCreate, outreach?: Partial<IcpOutreach>) => Promise<{ icp: ICP; warning?: string; campaignNote?: string }>
   /** Change an ICP's Lead Intel fields (name, industry, rule…) in Lead Intel. Rejects with the backend's reason. */
-  updateIcpDefinition: (id: string, input: api.IcpCreate) => Promise<ICP>
+  updateIcpDefinition: (id: string, input: api.IcpCreate) => Promise<{ icp: ICP; campaignNote?: string }>
   /** Add one lead in the backend. Rejects with the backend's reason (e.g. they're already a lead). */
   addLead: (input: api.LeadInput) => Promise<Lead>
   /** Move leads to another ICP in the backend. */
@@ -260,7 +261,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const createIcp: Store["createIcp"] = async (input, outreach) => {
-    let icp = api.toIcp(await api.createIcp(input))
+    const raw = await api.createIcp(input)
+    let icp = api.toIcp(raw)
     let warning: string | undefined
     if (outreach && Object.keys(outreach).length) {
       try {
@@ -271,13 +273,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
     }
     setIcps((list) => [...list, icp].sort((a, b) => a.priority - b.priority))
-    return { icp, warning }
+    return { icp, warning, campaignNote: raw.campaignNote ?? undefined }
   }
 
   const updateIcpDefinition: Store["updateIcpDefinition"] = async (id, input) => {
-    const icp = api.toIcp(await api.updateIcpDefinition(currentWorkspaceId, id, input))
+    const raw = await api.updateIcpDefinition(currentWorkspaceId, id, input)
+    const icp = api.toIcp(raw)
     setIcps((list) => list.map((i) => (i.id === id ? icp : i)).sort((a, b) => a.priority - b.priority))
-    return icp
+    return { icp, campaignNote: raw.campaignNote ?? undefined }
   }
 
   const updateIcp: Store["updateIcp"] = async (id, patch) => {

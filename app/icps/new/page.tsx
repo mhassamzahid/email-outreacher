@@ -40,9 +40,10 @@ export default function NewIcpPage() {
     if (!valid) return
     setSaving(true)
     try {
-      const { icp: created, warning } = await createIcp(icp, { titles, description })
+      const { icp: created, warning, campaignNote } = await createIcp(icp, { titles, description })
       if (warning) toast.warning(warning)
       else toast.success(`Added ${created.name}`, { description: "Find companies for it on the Companies page, with Google Maps or Apollo." })
+      if (campaignNote) (campaignNote.startsWith("Campaign not set up") ? toast.warning : toast.info)(campaignNote)
       router.push(`/icps/${created.id}`)
     } catch (e) {
       setServerError(e instanceof Error ? e.message : "Couldn't add the ICP.")
