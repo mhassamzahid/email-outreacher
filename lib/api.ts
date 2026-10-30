@@ -691,15 +691,26 @@ export const fetchUsage = (workspaceId: string, days: number) => api<Usage>(`/us
 
 // ---------- Cost estimator ----------
 
-/** month: a fixed monthly amount; lead: per lead contacted; email: per email sent. */
-export type CostUnit = "month" | "lead" | "email"
+/** How an item's quantity counts: per lead contacted, per month, or per email sent. */
+export type CostBasis = "lead" | "month" | "email"
 
+/** One thing that costs money: an operation (an email written, a post fetched…) or a subscription.
+ * A month costs price × quantity, times leads or emails sent for those bases. */
 export interface CostItem {
   id: string
   name: string
   category: string
-  unit: CostUnit
-  amountUsd: number
+  /** What one use is, like "per post". */
+  unitLabel: string
+  priceUsd: number
+  quantity: number
+  basis: CostBasis
+  /** Claude operations: priced from tokens per use and the model's price per token. */
+  model: string | null
+  tokensIn: number | null
+  tokensOut: number | null
+  /** The Usage log action it's measured against, like "Write emails". */
+  action: string | null
   /** Where the number comes from. */
   note: string
   enabled: boolean
@@ -713,6 +724,15 @@ export interface CostEstimate {
   replyRatePct: number
   items: CostItem[]
 }
+
+export interface CostReference {
+  claudePrices: { model: string; inputPerMtok: number; outputPerMtok: number }[]
+  /** Your average per use of each Claude operation over the last 90 days. */
+  measured: { action: string; uses: number; tokensIn: number; tokensOut: number; costUsd: number }[]
+  since: string
+}
+
+export const fetchCostReference = (workspaceId: string) => api<CostReference>("/settings/cost-estimate/reference", { workspaceId })
 
 /** The workspace's saved estimate, or the starting one (only sourced prices filled in). */
 export const fetchCostEstimate = (workspaceId: string) => api<CostEstimate>("/settings/cost-estimate", { workspaceId })
