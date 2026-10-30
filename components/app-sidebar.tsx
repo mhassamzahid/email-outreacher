@@ -10,6 +10,9 @@ import {
   FileText,
   Gauge,
   LogOut,
+  CircleUserRound,
+  Moon,
+  Sun,
   Mail,
   MessageSquareText,
   Package,
@@ -25,7 +28,9 @@ import {
   Mails,
   Reply,
   Send,
+  type LucideIcon,
 } from "lucide-react"
+import { useTheme } from "next-themes"
 import { toast } from "sonner"
 import {
   Sidebar,
@@ -33,6 +38,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuBadge,
@@ -43,7 +49,6 @@ import {
 } from "@/components/ui/sidebar"
 import { ChangePasswordDialog } from "@/components/change-password-dialog"
 import { ColdbrewMark } from "@/components/coldbrew-mark"
-import { ThemeToggle } from "@/components/theme-toggle"
 import { WorkspaceDialog } from "@/components/users/workspace-dialog"
 import {
   DropdownMenu,
@@ -58,6 +63,17 @@ import { useAuth } from "@/lib/auth"
 import { formatUsd } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+
+interface NavItem {
+  href: string
+  label: string
+  icon: LucideIcon
+  count?: number
+  /** Shown instead of a count, e.g. the month's spend. */
+  badge?: string
+  countLabel?: string
+  tone?: string
+}
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -77,23 +93,53 @@ export function AppSidebar() {
   const spent = (usage.data?.providers ?? []).reduce((sum, p) => sum + p.costUsd, 0)
   const ratio = spent / settings.monthlyBudgetUsd
 
-  const nav = [
-    { href: "/icps", label: "ICPs", icon: Target },
-    { href: "/products", label: "Products", icon: Package },
-    { href: "/companies", label: "Companies", icon: Building2 },
-    { href: "/people", label: "People", icon: UserSearch },
-    { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
-    { href: "/feedback", label: "Feedback", icon: MessageSquareText },
-    { href: "/examples", label: "Example emails", icon: Mail },
-    { href: "/leads", label: "Leads", icon: Users },
-    { href: "/outbox", label: "Outbox", icon: Send },
-    { href: "/replies", label: "Replies", icon: Reply },
-    { href: "/mailboxes", label: "Mailboxes", icon: Mails },
-    { href: "/prompts", label: "Prompts", icon: FileText },
-    { href: "/usage", label: "Usage", icon: Gauge },
-    ...(isAdmin ? [{ href: "/users", label: "Users", icon: UserCog }] : []),
-    { href: "/settings", label: "Settings", icon: Settings },
+  // In the order the work happens: find who to contact, write to them, send, then run the workspace.
+  const groups: { label: string; items: NavItem[] }[] = [
+    {
+      label: "Prospecting",
+      items: [
+        { href: "/icps", label: "ICPs", icon: Target },
+        { href: "/products", label: "Products", icon: Package },
+        { href: "/companies", label: "Companies", icon: Building2 },
+        { href: "/people", label: "People", icon: UserSearch },
+        { href: "/leads", label: "Leads", icon: Users },
+      ],
+    },
+    {
+      label: "Writing",
+      items: [
+        { href: "/review", label: "Review", icon: Inbox, count: toReview, countLabel: `${toReview} drafts need review` },
+        { href: "/prompts", label: "Prompts", icon: FileText },
+        { href: "/examples", label: "Example emails", icon: Mail },
+        { href: "/feedback", label: "Feedback", icon: MessageSquareText },
+      ],
+    },
+    {
+      label: "Sending",
+      items: [
+        { href: "/outbox", label: "Outbox", icon: Send },
+        { href: "/replies", label: "Replies", icon: Reply },
+        { href: "/mailboxes", label: "Mailboxes", icon: Mails },
+      ],
+    },
+    {
+      label: "Workspace",
+      items: [
+        {
+          href: "/usage",
+          label: "Usage",
+          icon: Gauge,
+          badge: formatUsd(spent),
+          countLabel: `Spent in the last 30 days: ${formatUsd(spent)} of ${formatUsd(settings.monthlyBudgetUsd)} (${Math.round(ratio * 100)}%)`,
+          tone: ratio >= 1 ? "text-negative" : ratio >= 0.8 ? "text-warning" : undefined,
+        },
+        ...(isAdmin ? [{ href: "/users", label: "Users", icon: UserCog }] : []),
+        { href: "/settings", label: "Settings", icon: Settings },
+      ],
+    },
   ]
+  // Each row's place in the reveal animation, counted across the groups.
+  const order = new Map(groups.flatMap((g) => g.items).map((item, i) => [item.href, i + 2]))
 
   return (
     <Sidebar collapsible="icon" variant="inset">
@@ -109,59 +155,43 @@ export function AppSidebar() {
         </Link>
         <WorkspaceSwitcher isAdmin={isAdmin} />
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu className="gap-0.5">
-              {nav.map(({ href, label, icon: Icon, count, countLabel }, i) => (
-                <SidebarMenuItem key={href} style={{ "--i": i + 2 } as CSSProperties}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={pathname.startsWith(href)}
-                    tooltip={label}
-                    className="h-8 text-[14px] data-[active=true]:font-medium"
-                  >
-                    <Link href={href}>
-                      <Icon className="text-muted-foreground" />
-                      <span>{label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  {!!count && (
-                    <SidebarMenuBadge className="tabular-nums text-muted-foreground" title={countLabel} aria-label={countLabel}>
-                      {count}
-                    </SidebarMenuBadge>
-                  )}
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <SidebarContent className="gap-0">
+        {groups.map((group) => (
+          <SidebarGroup key={group.label} className="py-1">
+            <SidebarGroupLabel className="sidebar-reveal h-6 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+              {group.label}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="gap-0.5">
+                {group.items.map(({ href, label, icon: Icon, count, badge, countLabel, tone }) => (
+                  <SidebarMenuItem key={href} style={{ "--i": order.get(href) } as CSSProperties}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={pathname.startsWith(href)}
+                      tooltip={label}
+                      className="h-8 text-[14px] data-[active=true]:font-medium"
+                    >
+                      <Link href={href}>
+                        <Icon className="text-muted-foreground" />
+                        <span>{label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                    {(!!count || badge) && (
+                      <SidebarMenuBadge className={cn("tabular-nums", tone ?? "text-muted-foreground")} title={countLabel} aria-label={countLabel}>
+                        {badge ?? count}
+                      </SidebarMenuBadge>
+                    )}
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter className="gap-3 px-2 pb-3">
-        <Link
-          href="/usage"
-          className="sidebar-reveal space-y-1.5 rounded-md px-2 py-2 whitespace-nowrap transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]:hidden"
-          style={{ "--i": nav.length + 2 } as CSSProperties}
-        >
-          <div className="flex items-baseline justify-between text-[13px]">
-            <span className="text-muted-foreground">Spent, last 30 days</span>
-            <span className="text-muted-foreground tabular-nums">{Math.round(ratio * 100)}%</span>
-          </div>
-          <div className="text-[13px] tabular-nums">
-            <span className="font-medium text-foreground">{formatUsd(spent)}</span>
-            <span className="text-muted-foreground"> of {formatUsd(settings.monthlyBudgetUsd)}</span>
-          </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-sidebar-accent">
-            <div
-              className={cn("h-full rounded-full", ratio >= 1 ? "bg-negative" : ratio >= 0.8 ? "bg-warning" : "bg-data")}
-              style={{ width: `${Math.min(100, ratio * 100)}%` }}
-            />
-          </div>
-        </Link>
         <SidebarMenu className="gap-0.5">
-          <ThemeToggle />
           <CollapseToggle />
-          <SignOut />
+          <AccountMenu />
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
@@ -253,32 +283,42 @@ function CollapseToggle() {
   )
 }
 
-/** Who's signed in: change the password, or sign out. */
-function SignOut() {
+/** Who's signed in, as one row: its menu switches the theme, changes the password or signs out. */
+function AccountMenu() {
   const { me, session, signOut } = useAuth()
+  const { resolvedTheme, setTheme } = useTheme()
   const [changing, setChanging] = useState(false)
+  const email = me?.email ?? session?.user.email ?? ""
+  const dark = resolvedTheme === "dark"
   return (
     <>
       <SidebarMenuItem>
-        <SidebarMenuButton tooltip="Change password" className="h-8 text-[14px]" onClick={() => setChanging(true)}>
-          <KeyRound className="text-muted-foreground" />
-          <span>Change password</span>
-        </SidebarMenuButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton tooltip={email || "Account"} className="h-auto py-1.5 text-[14px]" aria-label={`Account menu for ${email}`}>
+              <CircleUserRound className="text-muted-foreground" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{me?.name || "Account"}</span>
+                {email && <span className="block truncate text-xs text-muted-foreground">{email}</span>}
+              </span>
+              <ChevronsUpDown className="size-3.5 text-muted-foreground" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-52">
+            <DropdownMenuItem onSelect={() => setTheme(dark ? "light" : "dark")}>
+              {dark ? <Sun /> : <Moon />} {dark ? "Light theme" : "Dark theme"}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setChanging(true)}>
+              <KeyRound /> Change password
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => void signOut()}>
+              <LogOut /> Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </SidebarMenuItem>
-      {changing && <ChangePasswordDialog email={me?.email ?? session?.user.email ?? ""} onClose={() => setChanging(false)} />}
-      <SidebarMenuItem>
-        <SidebarMenuButton
-          tooltip={me ? `Sign out ${me.email}` : "Sign out"}
-          className="h-auto py-1.5 text-[14px]"
-          onClick={() => void signOut()}
-        >
-          <LogOut className="text-muted-foreground" />
-          <span className="min-w-0">
-            <span className="block">Sign out</span>
-            {me && <span className="block truncate text-xs text-muted-foreground">{me.email}</span>}
-          </span>
-        </SidebarMenuButton>
-      </SidebarMenuItem>
+      {changing && <ChangePasswordDialog email={email} onClose={() => setChanging(false)} />}
     </>
   )
 }
