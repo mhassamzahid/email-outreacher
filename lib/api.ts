@@ -198,6 +198,9 @@ export interface Mailbox {
   authStatus: string
   needsAttention: boolean
   lastError: string | null
+  /** When CheapSequencer last read the inbox (how replies are found); stale means replies are being missed. */
+  lastSyncedAt: string | null
+  syncStale: boolean
   tags: string[]
   campaignDaily: number
   warmupDaily: number
