@@ -23,6 +23,8 @@ import {
   UserCog,
   Users,
   Mails,
+  Reply,
+  Send,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -84,6 +86,8 @@ export function AppSidebar() {
     { href: "/feedback", label: "Feedback", icon: MessageSquareText },
     { href: "/examples", label: "Example emails", icon: Mail },
     { href: "/leads", label: "Leads", icon: Users },
+    { href: "/outbox", label: "Outbox", icon: Send },
+    { href: "/replies", label: "Replies", icon: Reply },
     { href: "/mailboxes", label: "Mailboxes", icon: Mails },
     { href: "/prompts", label: "Prompts", icon: FileText },
     { href: "/usage", label: "Usage", icon: Gauge },

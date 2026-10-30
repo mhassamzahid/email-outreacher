@@ -297,6 +297,83 @@ export interface FollowUpRun {
 
 export const runFollowUps = (workspaceId: string) => api<FollowUpRun>("/sending/follow-ups/run", { workspaceId, method: "POST" })
 
+export type OutboxState =
+  | "queued"
+  | "sending"
+  | "replied"
+  | "bounced"
+  | "unsubscribed"
+  | "failed"
+  | "paused"
+  | "stopped"
+  | "finished"
+
+export interface OutboxStep {
+  step: 1 | 2 | 3
+  /** Empty on 2 and 3: they reply in the same thread. */
+  subject: string
+  body: string
+  status: "waiting" | "sent" | "skipped"
+  /** False while email 2 or 3 is still the generic text from Settings. */
+  personalized: boolean
+  sentAt: string | null
+}
+
+export interface OutboxRow {
+  emailId: string
+  leadId: string
+  name: string
+  email: string
+  title: string
+  company: string
+  campaignId: string
+  campaign: string
+  /** The mailbox all three emails go out from, once CheapSequencer has assigned one. */
+  mailbox: string | null
+  state: OutboxState
+  sent: number
+  queuedAt: string | null
+  lastSentAt: string | null
+  syncedAt: string | null
+  steps: OutboxStep[]
+}
+
+/** Every queued lead and its three emails, as of the last follow-up check. */
+export const fetchOutbox = (workspaceId: string) => api<OutboxRow[]>("/sending/outbox", { workspaceId })
+
+export interface ReplyThread {
+  id: string
+  subject: string
+  preview: string
+  mailbox: string
+  leadEmail: string
+  leadName: string
+  leadId: string | null
+  campaign: string
+  lastMessageAt: string | null
+  messageCount: number
+  inboundCount: number
+  unreadCount: number
+  classification: string | null
+}
+
+export interface ReplyMessage {
+  id: string
+  direction: "inbound" | "outbound"
+  fromName: string
+  fromAddress: string
+  to: string[]
+  sentAt: string | null
+  subject: string
+  body: string
+}
+
+/** Conversations in Coldbrew's campaigns where the lead wrote back, from CheapSequencer's inbox. */
+export const fetchReplies = (workspaceId: string) => api<ReplyThread[]>("/sending/replies", { workspaceId })
+
+export const fetchReplyThread = (workspaceId: string, threadId: string) =>
+  api<ReplyThread & { messages: ReplyMessage[] }>(`/sending/replies/${encodeURIComponent(threadId)}`, { workspaceId })
+
 // ---------- Do-not-contact list: one for every workspace ----------
 
 export type ExclusionKeyType = "domain" | "email" | "phone" | "place_id" | "name_location"
