@@ -6,7 +6,9 @@ import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTem
 
 // The backend. Pages fetch on mount and show their own loading and error states.
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "")
+// The backend is reached only through this app's own server (app/api/v1), which adds the API secret.
+// The browser never learns the backend's address.
+export const API_URL = ""
 
 export class ApiError extends Error {
   constructor(
@@ -36,7 +38,7 @@ export async function api<T>(
       body: opts.csv !== undefined ? opts.csv : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
   } catch {
-    throw new ApiError(`Can't reach the backend at ${API_URL}. Is it running?`, 0)
+    throw new ApiError("Can't reach Coldbrew's server. Check your connection.", 0)
   }
   if (res.status === 204) return undefined as T
   // The session is gone or no longer valid: sign out, which sends the app back to the sign-in page.

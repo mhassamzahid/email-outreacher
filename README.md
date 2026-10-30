@@ -13,6 +13,15 @@ npm run dev
 
 Open http://localhost:3000 (redirects to `/icps`).
 
+## Reaching the backend
+
+The browser never calls the backend. It calls this app's own `/api/v1/*`, and the route in
+`app/api/v1/[...path]/route.ts` forwards each call to `BACKEND_URL` with the shared `API_SECRET` added on
+the server. Neither value is sent to the browser. `proxy.ts` refuses any request made to an address not in
+`AUTHORIZED_URLS` (and API calls coming from pages on other sites). Set all three in `.env.local`, and on
+Vercel as environment variables: see `.env.example`. Add each preview URL you use to `AUTHORIZED_URLS`,
+or it gets 403.
+
 ## Where things live
 
 | Path | What |
