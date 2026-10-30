@@ -292,16 +292,12 @@ function MailboxTable({ rows }: { rows: Mailbox[] }) {
                 <TableCell>
                   {m.needsAttention ? (
                     <span title={m.lastError ?? undefined}>
-                      <Pill tone="negative">
-                        {m.authStatus !== "ok" ? "Reconnect needed" : m.syncStale ? "Replies not syncing" : "Needs attention"}
-                      </Pill>
+                      <Pill tone="negative">{m.authStatus !== "ok" ? "Reconnect needed" : "Needs attention"}</Pill>
                     </span>
                   ) : (
                     <Pill tone="positive">Connected</Pill>
                   )}
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    <span className="capitalize">{m.provider}</span> · inbox read {m.lastSyncedAt ? ago(m.lastSyncedAt) : "never"}
-                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground capitalize">{m.provider}</div>
                 </TableCell>
                 <TableCell>
                   {m.warmupEnabled ? <Pill tone={warm.tone}>{warm.label}</Pill> : <Pill>Off</Pill>}
