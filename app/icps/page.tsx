@@ -18,7 +18,7 @@ const LOW_CONFIDENCE = 60
 export default function IcpsPage() {
   const { icps, icpsStatus, icpsError, reloadIcps, workspacesStatus, leads, settings, currentWorkspaceId } = useStore()
   const loading = icpsStatus === "loading" || workspacesStatus === "loading"
-  const emails = useApi(() => fetchEmails(currentWorkspaceId), [currentWorkspaceId])
+  const emails = useApi(() => (currentWorkspaceId ? fetchEmails(currentWorkspaceId) : Promise.resolve([])), [currentWorkspaceId])
 
   const rows = icps.map((icp) => {
     const icpLeads = leads.filter((l) => l.icpId === icp.id)

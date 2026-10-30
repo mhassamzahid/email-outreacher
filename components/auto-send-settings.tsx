@@ -18,7 +18,7 @@ import type { ScoringSettings } from "@/lib/types"
 /** Threshold, auto-send and daily cap. One Save for the panel; turning auto-send on asks first. */
 export function AutoSendSettings() {
   const { settings, setSettings, templates, currentWorkspaceId } = useStore()
-  const emails = useApi(() => fetchEmails(currentWorkspaceId), [currentWorkspaceId])
+  const emails = useApi(() => (currentWorkspaceId ? fetchEmails(currentWorkspaceId) : Promise.resolve([])), [currentWorkspaceId])
   const [draft, setDraft] = useState<ScoringSettings>(settings.scoring)
   const [confirmOn, setConfirmOn] = useState(false)
   const set = <K extends keyof ScoringSettings>(key: K, value: ScoringSettings[K]) => setDraft((d) => ({ ...d, [key]: value }))

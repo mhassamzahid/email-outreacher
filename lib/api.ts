@@ -19,11 +19,26 @@ export class ApiError extends Error {
   }
 }
 
+// What useApi loaded last, so a page opened again shows it at once while it refreshes. Keyed by the
+// requests a load made (see `recording`), never shared across signed-in people.
+const CACHE_LIMIT = 100
+const cache = new Map<string, unknown>()
+let cachedFor: string | null | undefined
+supabase.auth.onAuthStateChange((_event, session) => {
+  const who = session?.user.id ?? null
+  if (who !== cachedFor) cache.clear()
+  cachedFor = who
+})
+
+// The GET requests a load starts before its first await: what its data is made of.
+let recording: string[] | null = null
+
 /** A backend call. `body` is sent as JSON; `csv` as a CSV file's text. */
 export async function api<T>(
   path: string,
   opts: { workspaceId?: string | null; method?: string; body?: unknown; csv?: string } = {},
 ): Promise<T> {
+  if (recording && (opts.method ?? "GET") === "GET") recording.push(`${opts.workspaceId ?? ""} ${path}`)
   const token = await accessToken()
   let res: Response
   try {
@@ -67,7 +82,46 @@ export async function apiAll<T>(path: string, workspaceId?: string | null, cap =
   return out
 }
 
-/** Load on mount and on `reload()`. Keeps the last good data while reloading. */
+/** A background job (backend: routers/jobs.py). Long-running work runs in Coldbrew's worker, not in a request. */
+export interface Job {
+  id: string
+  label: string
+  status: "queued" | "running" | "done" | "failed" | "cancelled"
+  /** What's happening now, in words, like "Waiting for a worker". */
+  step: string | null
+  detail: string | null
+  statusCode: number | null
+  result: unknown
+}
+
+/** Run a long-running endpoint as a background job and wait for its answer: the same answer, or the same
+error, a direct call would give. Pass `onUpdate` to show progress while it runs. */
+export async function runJob<T>(
+  path: string,
+  opts: { workspaceId: string; body?: unknown },
+  onUpdate?: (job: Job) => void,
+): Promise<T> {
+  let job = await api<Job>("/jobs", { workspaceId: opts.workspaceId, method: "POST", body: { path, body: opts.body ?? null } })
+  // Checks back often at first (most jobs are short), then every 5 seconds; gives up after 70 minutes,
+  // past the worker's own time limit.
+  const started = Date.now()
+  for (let wait = 700; job.status === "queued" || job.status === "running"; wait = Math.min(wait * 1.5, 5000)) {
+    if (Date.now() - started > 70 * 60_000) throw new ApiError(`${job.label} is still running. Check back later.`, 0)
+    // Nothing picked it up: no worker. It stays queued and runs once one starts.
+    if (job.status === "queued" && Date.now() - started > 60_000)
+      throw new ApiError(`${job.label} is waiting for Coldbrew's worker, which isn't running. It will run once the worker starts.`, 503)
+    await new Promise((resolve) => setTimeout(resolve, wait))
+    job = await api<Job>(`/jobs/${job.id}`, { workspaceId: opts.workspaceId })
+    onUpdate?.(job)
+  }
+  if (job.status === "done") return job.result as T
+  throw new ApiError(job.detail ?? `${job.label} didn't finish.`, job.statusCode ?? 500)
+}
+
+/** Load on mount and on `reload()`. Keeps the last good data while reloading.
+
+A page opened again shows what it loaded last time straight away (`loading` stays false) and refreshes
+it in the background. */
 export function useApi<T>(load: () => Promise<T>, deps: unknown[]) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -76,11 +130,36 @@ export function useApi<T>(load: () => Promise<T>, deps: unknown[]) {
 
   useEffect(() => {
     let live = true
-    load()
+    const requests: string[] = []
+    recording = requests
+    let pending: Promise<T>
+    try {
+      pending = load()
+    } finally {
+      recording = null
+    }
+    // Same requests, same code, same inputs: the same data. No recorded request, no cache.
+    const key = requests.length ? `${requests.join("|")}#${load.toString()}#${JSON.stringify(deps)}` : null
+    // Not on reload(): that follows a change, so the old data would be wrong for a moment.
+    if (key && tick === 0 && cache.has(key)) {
+      const last = cache.get(key) as T
+      void Promise.resolve().then(() => {
+        if (!live) return
+        setData(last)
+        setError(null)
+        setLoading(false)
+      })
+    }
+    pending
       .then((d) => {
         if (!live) return
         setData(d)
         setError(null)
+        if (key) {
+          cache.delete(key)
+          cache.set(key, d)
+          if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string)
+        }
       })
       .catch((e: unknown) => live && setError(e instanceof Error ? e.message : "Something went wrong."))
       .finally(() => live && setLoading(false))
@@ -302,7 +381,7 @@ export interface QueueResult {
 
 /** Put approved first emails into their ICP's campaign. Doesn't activate it or send. */
 export const queueEmails = (workspaceId: string, emailIds: string[]) =>
-  api<QueueResult>("/sending/queue", { workspaceId, method: "POST", body: { emailIds } })
+  runJob<QueueResult>("/sending/queue", { workspaceId, body: { emailIds } })
 
 export interface FollowUpRun {
   checked: number
@@ -319,9 +398,9 @@ export interface CampaignSync {
 }
 
 /** Give every ICP that's on its "Coldbrew: <ICP>" campaign: link, rename or create a draft copy. */
-export const syncCampaigns = (workspaceId: string) => api<CampaignSync[]>("/sending/campaigns/sync", { workspaceId, method: "POST" })
+export const syncCampaigns = (workspaceId: string) => runJob<CampaignSync[]>("/sending/campaigns/sync", { workspaceId })
 
-export const runFollowUps = (workspaceId: string) => api<FollowUpRun>("/sending/follow-ups/run", { workspaceId, method: "POST" })
+export const runFollowUps = (workspaceId: string) => runJob<FollowUpRun>("/sending/follow-ups/run", { workspaceId })
 
 export type OutboxState =
   | "queued"
@@ -499,7 +578,7 @@ export const fetchStakeholders = (workspaceId: string, companyId?: string) =>
   api<Stakeholder[]>(companyId ? `/stakeholders?companyId=${companyId}` : "/stakeholders", { workspaceId })
 
 export const revealStakeholders = (workspaceId: string, stakeholderIds: string[]) =>
-  api<StakeholderRevealResult>("/stakeholders/reveal", { workspaceId, method: "POST", body: { stakeholderIds } })
+  runJob<StakeholderRevealResult>("/stakeholders/reveal", { workspaceId, body: { stakeholderIds } })
 
 export const fetchAllStakeholders = (workspaceId: string) => api<Stakeholder[]>("/stakeholders", { workspaceId })
 
@@ -553,11 +632,11 @@ export const fetchLeadPosts = (
   workspaceId: string,
   body: { leadIds: string[]; maxPosts: number; maxAgeDays: number; sources?: ("linkedin" | "instagram")[] },
 ) =>
-  api<{
+  runJob<{
     results: { leadId: string; linkedin: number | null; instagram: number | null; new: number }[]
     costUsd: number | null
     error: string | null
-  }>("/posts/fetch", { workspaceId, method: "POST", body })
+  }>("/posts/fetch", { workspaceId, body })
 
 // ---------- Company pipeline ----------
 
@@ -646,16 +725,15 @@ export const findCompanies = (
     googleMaps?: { searchTerms: string[]; locations: string[]; radiusMiles: number; maxSearches: number }
   },
 ) =>
-  api<{ leadIntel: SourceFindResult | null; apollo: SourceFindResult | null; googleMaps: SourceFindResult | null }>("/pipeline/find", {
+  runJob<{ leadIntel: SourceFindResult | null; apollo: SourceFindResult | null; googleMaps: SourceFindResult | null }>("/pipeline/find", {
     workspaceId,
-    method: "POST",
     body,
   })
 
 export const researchCompanies = (workspaceId: string, companyIds: string[], force = false) =>
-  api<{ researched: number; skipped: number; qualified: number; notFit: number; errors: number; costUsd: number; notes: string[] }>(
+  runJob<{ researched: number; skipped: number; qualified: number; notFit: number; errors: number; costUsd: number; notes: string[] }>(
     "/pipeline/research",
-    { workspaceId, method: "POST", body: { companyIds, force } },
+    { workspaceId, body: { companyIds, force } },
   )
 
 export const setCompanyStatus = (workspaceId: string, companyId: string, status: "qualified" | "not_fit") =>
@@ -664,7 +742,7 @@ export const setCompanyStatus = (workspaceId: string, companyId: string, status:
 export const findPipelineStakeholders = (
   workspaceId: string,
   body: { companyIds: string[]; source: "apollo" | "linkedin"; titles: string[]; seniorities: string[]; maxPerCompany: number },
-) => api<StakeholderSearchResult & { costUsd: number | null }>("/pipeline/stakeholders", { workspaceId, method: "POST", body })
+) => runJob<StakeholderSearchResult & { costUsd: number | null }>("/pipeline/stakeholders", { workspaceId, body })
 
 // ---------- Usage: what Claude, Apollo and Apify have cost ----------
 
@@ -877,7 +955,7 @@ export interface GenerateResult {
 export const fetchEmails = (workspaceId: string) => api<EmailDraft[]>("/emails", { workspaceId })
 
 export const generateEmails = (workspaceId: string, leadIds: string[], instruction = "") =>
-  api<GenerateResult>("/emails/generate", { workspaceId, method: "POST", body: { leadIds, instruction } })
+  runJob<GenerateResult>("/emails/generate", { workspaceId, body: { leadIds, instruction } })
 
 export const updateEmail = (
   workspaceId: string,
@@ -911,7 +989,7 @@ export interface PromptSuggestion {
 }
 
 export const suggestEmailPrompt = (workspaceId: string, icpId: string) =>
-  api<PromptSuggestion>("/improve/email-prompt", { workspaceId, method: "POST", body: { icpId } })
+  runJob<PromptSuggestion>("/improve/email-prompt", { workspaceId, body: { icpId } })
 
 // ---------- Settings: how many rated emails Claude learns from ----------
 
