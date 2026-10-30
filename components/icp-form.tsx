@@ -3,18 +3,16 @@
 import Link from "next/link"
 import type { ReactNode } from "react"
 import { Plus } from "lucide-react"
-import { SourceIcon } from "@/components/source-icon"
 import { TagInput } from "@/components/tag-input"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import { fetchProducts, useApi } from "@/lib/api"
-import { SOURCE_LABEL, formatUsd } from "@/lib/format"
-import { COST_PER_POST, FETCHED_SOURCES, costPerLeadForSource } from "@/lib/costs"
+import { fetchProducts, fetchSources, useApi, type SourceInfo, type Sources } from "@/lib/api"
+import { formatUsd } from "@/lib/format"
 import { useStore } from "@/lib/store"
-import type { ICP, IcpOutreach, IcpSource, VerificationSource } from "@/lib/types"
+import type { ICP, IcpOutreach, IcpSource } from "@/lib/types"
 
 // The editable half of an ICP: this workspace's outreach settings. The ICP itself (name, industry,
 // matching rule) belongs to Lead Intel and is shown read-only by LeadIntelRule.
@@ -326,39 +324,82 @@ export function MessagingFields({ draft, set }: { draft: IcpDraft; set: SetDraft
   )
 }
 
-/** What reading one lead's posts costs, at most: every analysis source on, each with a full set of posts. */
-export function costPerLead(draft: Pick<IcpDraft, "enabledSources">, postsPerLead: number): number {
-  return FETCHED_SOURCES.filter((s) => draft.enabledSources.includes(s)).reduce((sum, s) => sum + costPerLeadForSource(s, postsPerLead), 0)
+/** What a source costs, in words: Apify's price for the plan, or who pays for it. */
+function sourceCost(source: SourceInfo): string {
+  if (source.provider === "claude") return "Claude"
+  if (source.provider === "coldbrew") return "Free"
+  if (source.provider === "jina") return "Free without a key"
+  if (source.unitPrice == null) return "Apify"
+  const unit = `${formatUsd(source.unitPrice)} ${source.unit.replace(/^per /, "a ")}`
+  return source.runPrice ? `${unit} + ${formatUsd(source.runPrice)} a run` : unit
 }
 
-const VERIFICATION: { source: VerificationSource; label: string; hint: string; cost: string }[] = [
-  { source: "website", label: "Website", hint: "Read by Coldbrew's own reader. Rules on website words need it.", cost: "Free" },
-  { source: "jina", label: "Jina fallback", hint: "Reads a site when it blocks Coldbrew's reader.", cost: "Free without a key" },
-  { source: "instagram", label: "Instagram profile", hint: "Followers, bio and recent posts, through Apify.", cost: "Apify" },
-  { source: "score", label: "Claude's fit score", hint: "Scores the fit from everything read. Off: the ICP's rules alone decide.", cost: "Claude" },
-]
+/** One source with its switch: name, Planned when Coldbrew doesn't run it yet, what it reads, and its cost. */
+function SourceRow({ source, on, onChange }: { source: SourceInfo; on: boolean; onChange: (on: boolean) => void }) {
+  const id = `${source.kind}-${source.id}`
+  return (
+    <div className="flex items-start gap-3">
+      <Label htmlFor={id} className="flex-1 flex-col items-start gap-0.5 font-normal">
+        <span className="flex items-center gap-1.5">
+          {source.label}
+          {source.status === "planned" && (
+            <span
+              className="rounded border px-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+              title="Coldbrew doesn't run this source yet. Choosing it saves the choice; research skips it until it's wired in."
+            >
+              Planned
+            </span>
+          )}
+        </span>
+        <span className="text-xs text-muted-foreground">{source.hint}</span>
+        <span className="text-xs text-foreground/80 tabular-nums">{sourceCost(source)}</span>
+      </Label>
+      <Switch id={id} checked={on} onCheckedChange={onChange} />
+    </div>
+  )
+}
+
+/** Where the prices come from: Apify, for the account's plan tier, or why they're missing. */
+function PriceNote({ sources }: { sources: Sources | null }) {
+  if (!sources) return null
+  return (
+    <p className="text-xs text-muted-foreground">
+      {sources.tier ? `Prices for your Apify ${sources.tier} plan, read from Apify.` : (sources.note ?? "Apify prices unavailable.")}
+    </p>
+  )
+}
+
+function useSources(kind: SourceInfo["kind"]) {
+  const { data, error, loading } = useApi(fetchSources, [])
+  return { data, error, loading, list: (data?.sources ?? []).filter((x) => x.kind === kind) }
+}
+
+const toggled = (list: string[], id: string, on: boolean) => (on ? [...new Set([...list, id])] : list.filter((x) => x !== id))
+
+function SourcesState({ loading, error }: { loading: boolean; error: string | null }) {
+  if (error) return <p className="text-xs text-destructive">Couldn&apos;t load the sources: {error}</p>
+  if (loading) return <p className="text-xs text-muted-foreground">Loading sources…</p>
+  return null
+}
 
 /** Verification: what research reads to decide whether a business is worth contacting. */
 export function VerificationSourcesFields({ draft, set }: { draft: IcpDraft; set: SetDraft }) {
-  const toggle = (s: VerificationSource, on: boolean) =>
-    set("verificationSources", on ? [...new Set([...draft.verificationSources, s])] : draft.verificationSources.filter((x) => x !== s))
+  const { data, error, loading, list } = useSources("verification")
   return (
     <div className="space-y-3">
-      {VERIFICATION.map((v) => (
-        <div key={v.source} className="flex items-start gap-3">
-          <Label htmlFor={`verify-${v.source}`} className="flex-1 flex-col items-start gap-0.5 font-normal">
-            <span>{v.label}</span>
-            <span className="text-xs text-muted-foreground">{v.hint}</span>
-          </Label>
-          <span className="pt-0.5 text-xs whitespace-nowrap text-muted-foreground">{v.cost}</span>
-          <Switch
-            id={`verify-${v.source}`}
-            checked={draft.verificationSources.includes(v.source)}
-            onCheckedChange={(on) => toggle(v.source, on)}
-          />
-        </div>
+      <SourcesState loading={loading && !data} error={error} />
+      {list.map((source) => (
+        <SourceRow
+          key={source.id}
+          source={source}
+          on={draft.verificationSources.includes(source.id)}
+          onChange={(on) => set("verificationSources", toggled(draft.verificationSources, source.id, on))}
+        />
       ))}
-      <p className="border-t pt-3 text-xs text-muted-foreground">How many pages of each site are read is set in Settings, Website reading.</p>
+      <div className="space-y-1 border-t pt-3">
+        <p className="text-xs text-muted-foreground">How many pages of each site are read is set in Settings, Website reading.</p>
+        <PriceNote sources={data} />
+      </div>
     </div>
   )
 }
@@ -375,7 +416,12 @@ export function AnalysisSourcesFields({
   postsPerLead: number
   maxPostAgeDays: number
 }) {
+  const { data, error, loading, list } = useSources("analysis")
   const posts = draft.postsPerSource ?? postsPerLead
+  // At most: every chosen source has a profile and a full set of posts. Per-run charges are shared by a whole run.
+  const perLead = list
+    .filter((x) => draft.enabledSources.includes(x.id))
+    .reduce((sum, x) => sum + (x.unitPrice ?? 0) * posts, 0)
   const limit = (key: "postsPerSource" | "maxPostAgeDays", label: string, fallback: number, max: number, unit: string) => (
     <div className="space-y-1.5">
       <Label htmlFor={`analysis-${key}`} className="text-xs font-normal text-muted-foreground">
@@ -398,30 +444,24 @@ export function AnalysisSourcesFields({
   )
   return (
     <div className="space-y-3">
-      {FETCHED_SOURCES.map((s) => (
-        <div key={s} className="flex items-center gap-3">
-          <SourceIcon source={s} />
-          <Label htmlFor={`src-${s}`} className="flex-1 font-normal">
-            {SOURCE_LABEL[s]} posts
-          </Label>
-          <span className="text-xs text-muted-foreground tabular-nums">{formatUsd(COST_PER_POST[s])} a post</span>
-          <Switch
-            id={`src-${s}`}
-            checked={draft.enabledSources.includes(s)}
-            onCheckedChange={(checked) =>
-              set("enabledSources", checked ? [...new Set([...draft.enabledSources, s])] : draft.enabledSources.filter((x) => x !== s))
-            }
-          />
-        </div>
+      <SourcesState loading={loading && !data} error={error} />
+      {list.map((source) => (
+        <SourceRow
+          key={source.id}
+          source={source}
+          on={draft.enabledSources.includes(source.id)}
+          onChange={(on) => set("enabledSources", toggled(draft.enabledSources, source.id, on))}
+        />
       ))}
       <div className="grid grid-cols-2 gap-3 border-t pt-3">
         {limit("postsPerSource", "Posts per source", postsPerLead, 20, "posts")}
         {limit("maxPostAgeDays", "Max post age (days)", maxPostAgeDays, 365, "days")}
       </div>
       <p className="text-xs text-muted-foreground">
-        Up to <b className="text-foreground tabular-nums">{formatUsd(costPerLead(draft, posts))}</b> per lead when each source has a
-        profile, at {posts} posts per source.
+        Up to <b className="text-foreground tabular-nums">{formatUsd(perLead)}</b> per lead when each source has a profile, at{" "}
+        {posts} posts per source.
       </p>
+      <PriceNote sources={data} />
     </div>
   )
 }

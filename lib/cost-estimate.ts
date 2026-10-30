@@ -4,6 +4,7 @@ export const BASIS_LABEL: Record<CostBasis, string> = {
   lead: "per lead",
   month: "a month",
   email: "per email sent",
+  company: "per company",
 }
 
 /** Emails sent in a month: leads times the average sent to each. */
@@ -15,6 +16,7 @@ export function sendsPerMonth(e: CostEstimate): number {
 export function usesPerMonth(item: CostItem, e: CostEstimate): number {
   if (item.basis === "lead") return item.quantity * e.leadsPerMonth
   if (item.basis === "email") return item.quantity * sendsPerMonth(e)
+  if (item.basis === "company") return item.quantity * e.companiesPerMonth
   return item.quantity
 }
 

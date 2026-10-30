@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { accessToken, supabase } from "./supabase"
-import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, Source, User, VerificationSource, Workspace } from "./types"
+import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, User, Workspace } from "./types"
 
 // The backend. Pages fetch on mount and show their own loading and error states.
 
@@ -144,8 +144,8 @@ export function toIcp(api: ApiIcp): ICP {
     ? {
         ...EMPTY_OUTREACH,
         ...profile,
-        enabledSources: profile.enabledSources as Source[],
-        verificationSources: (profile.verificationSources ?? EMPTY_OUTREACH.verificationSources) as VerificationSource[],
+        enabledSources: profile.enabledSources,
+        verificationSources: profile.verificationSources ?? EMPTY_OUTREACH.verificationSources,
       }
     : EMPTY_OUTREACH
   return { ...leadIntel, ...outreach, updatedAt: profile?.updatedAt ?? api.updatedAt }
@@ -705,7 +705,7 @@ export const fetchUsage = (workspaceId: string, days: number) => api<Usage>(`/us
 // ---------- Cost estimator ----------
 
 /** How an item's quantity counts: per lead contacted, per month, or per email sent. */
-export type CostBasis = "lead" | "month" | "email"
+export type CostBasis = "lead" | "month" | "email" | "company"
 
 /** One thing that costs money: an operation (an email written, a post fetched…) or a subscription.
  * A month costs price × quantity, times leads or emails sent for those bases. */
@@ -727,6 +727,8 @@ export interface CostItem {
   /** Where the number comes from. */
   note: string
   enabled: boolean
+  /** A source Coldbrew can't run yet: shown for planning only. */
+  planned: boolean
 }
 
 export interface CostEstimate {
@@ -735,8 +737,8 @@ export interface CostEstimate {
   emailsPerLead: number
   /** Replies per 100 leads; 0 until set. */
   replyRatePct: number
-  /** Website pages company verification reads per company. */
-  pagesPerCompany: number
+  /** Companies verified a month: lines counted per company use this. */
+  companiesPerMonth: number
   items: CostItem[]
 }
 
@@ -748,6 +750,31 @@ export interface CostReference {
   measured: { action: string; uses: number; tokensIn: number; tokensOut: number; costUsd: number }[]
   since: string
 }
+
+/** A verification or analysis source and its price on the account's Apify plan (read from Apify). */
+export interface SourceInfo {
+  id: string
+  kind: "verification" | "analysis"
+  level: "company" | "lead"
+  label: string
+  hint: string
+  provider: "coldbrew" | "jina" | "claude" | "apify"
+  unit: string
+  actor: string | null
+  /** live: Coldbrew runs it. planned: can be chosen and priced, but isn't run yet. */
+  status: "live" | "planned"
+  unitPrice: number | null
+  runPrice: number | null
+}
+
+export interface Sources {
+  /** The Apify plan tier the prices are for; null without an Apify token. */
+  tier: string | null
+  sources: SourceInfo[]
+  note: string | null
+}
+
+export const fetchSources = () => api<Sources>("/sources")
 
 export const fetchCostReference = (workspaceId: string) => api<CostReference>("/settings/cost-estimate/reference", { workspaceId })
 

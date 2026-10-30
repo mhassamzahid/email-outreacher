@@ -32,11 +32,10 @@ const MODEL_NAME = Object.fromEntries(MODELS.map(([id, name]) => [id, `Claude ${
 /** The lines that write emails: the model choice applies to both. */
 const WRITING = ["email-generation", "follow-up"]
 const FOLLOW_UP = "follow-up"
-/** Company verification's three parts: Claude's score, the website pages it reads, its Instagram check. */
-const VERIFY = { score: "verification", pages: "website-pages", instagram: "instagram-profile" } as const
-/** Lead analysis: each lead's recent posts, read for something to open the email with. */
-const ANALYSIS = { linkedin: "linkedin-posts", instagram: "instagram-posts" } as const
-const OWN_SECTION: string[] = [...Object.values(VERIFY), ...Object.values(ANALYSIS)]
+/** Lines with their own section: every verification source, and every lead analysis source. */
+const VERIFY = "Verification"
+const ANALYSIS = "Lead analysis"
+const SCORE = "verification"
 /** A subscription: one price a month, nothing to count. */
 const isPlan = (i: CostItem) => i.basis === "month" && i.unitLabel === "per month"
 
@@ -221,7 +220,7 @@ function Setup({
       <Verification draft={draft} canEdit={canEdit} update={update} setDraft={setDraft} />
       <Analysis draft={draft} canEdit={canEdit} update={update} />
 
-      {byCategory({ ...draft, items: draft.items.filter((i) => !OWN_SECTION.includes(i.id)) }).map((group) => (
+      {byCategory({ ...draft, items: draft.items.filter((i) => i.category !== VERIFY && i.category !== ANALYSIS) }).map((group) => (
         <div key={group.category} className="space-y-2.5 border-t border-rule pt-4">
           <div className="grid gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem_9rem]">
             <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{group.category}</h3>
@@ -269,8 +268,44 @@ function Price({ item, loading }: { item: CostItem; loading?: boolean }) {
   )
 }
 
-/** Verification: the sources used to decide whether a business is worth contacting, how many companies
- * go through it, and what one costs. */
+/** A source line in a section: name, Planned when Coldbrew doesn't run it yet, how many, and its price. */
+function SourceLine({
+  item,
+  per,
+  canEdit,
+  onQuantity,
+}: {
+  item: CostItem
+  per: string
+  canEdit: boolean
+  onQuantity: (n: number) => void
+}) {
+  return (
+    <div className="grid gap-x-3 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_7rem_9rem] sm:items-start">
+      <div className="min-w-0">
+        <p className="flex items-center gap-1.5 text-sm">
+          {item.name}
+          {item.planned && (
+            <span
+              className="rounded border px-1 text-[10px] font-medium tracking-wide text-muted-foreground uppercase"
+              title="Coldbrew doesn't run this source yet. It's here so you can plan its cost."
+            >
+              Planned
+            </span>
+          )}
+        </p>
+        <p className="text-xs text-muted-foreground" title={item.note}>
+          {item.model ? `${MODEL_NAME[item.model] ?? item.model}, set on the server` : `${per}, price ${item.unitLabel}`}
+        </p>
+      </div>
+      <NumberField label={`${item.name}: how many ${per}`} value={item.enabled ? item.quantity : 0} disabled={!canEdit} onChange={onQuantity} />
+      <Price item={item} />
+    </div>
+  )
+}
+
+/** Verification: the sources used to decide whether a business is worth contacting. How many companies
+ * go through it a month, how much of each source one company takes, and what one costs. */
 function Verification({
   draft,
   canEdit,
@@ -282,78 +317,52 @@ function Verification({
   update: (patches: Record<string, Partial<CostItem>>) => void
   setDraft: (fn: (d: CostEstimate) => CostEstimate) => void
 }) {
-  const line = (id: string) => draft.items.find((i) => i.id === id)
-  const score = line(VERIFY.score)
-  const pages = line(VERIFY.pages)
-  const instagram = line(VERIFY.instagram)
-  if (!score) return null
-  const companies = score.enabled ? score.quantity : 0
-  const perCompany = score.priceUsd + (pages?.priceUsd ?? 0) * draft.pagesPerCompany + (instagram?.priceUsd ?? 0)
-  const missing = [pages, instagram].filter((i): i is CostItem => !!i && i.priceUsd === 0).map((i) => i.name)
-
-  const setCompanies = (n: number) =>
-    update({
-      [VERIFY.score]: { quantity: n, basis: "month", enabled: true },
-      ...(pages && { [VERIFY.pages]: { quantity: n * draft.pagesPerCompany, basis: "month", enabled: true } }),
-      ...(instagram && { [VERIFY.instagram]: { quantity: n, basis: "month", enabled: true } }),
-    })
-  const setPages = (p: number) => {
-    setDraft((d) => ({ ...d, pagesPerCompany: p }))
-    if (pages) update({ [VERIFY.pages]: { quantity: companies * p, basis: "month", enabled: true } })
-  }
-
+  const sources = draft.items.filter((i) => i.category === VERIFY)
+  if (sources.length === 0) return null
+  const perCompany = sources.reduce((sum, i) => sum + (i.enabled ? i.quantity * i.priceUsd : 0), 0)
   return (
     <div className="space-y-3 border-t border-rule pt-4">
       <div className="flex items-baseline gap-2">
         <h3 className="flex-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Verification</h3>
-        <span className="text-xs font-medium tabular-nums">{money(companies * perCompany)} a month</span>
+        <span className="text-xs font-medium tabular-nums">{money(perCompany * draft.companiesPerMonth)} a month</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        The sources used to decide whether a business is worth contacting: its website and Instagram, then Claude&apos;s
-        fit score from both.
+        The sources used to decide whether a business is worth contacting. Type how much of each one company takes: website
+        pages, reviews, videos.
       </p>
-      <div className="grid gap-x-3 gap-y-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <p className="text-sm">Companies verified per month</p>
-          <NumberField label="Companies verified per month" value={companies} disabled={!canEdit} onChange={(n) => setCompanies(Math.round(n))} />
-        </div>
-        <div className="space-y-1.5">
-          <p className="text-sm">Website pages per company</p>
-          <NumberField label="Website pages per company" value={draft.pagesPerCompany} disabled={!canEdit} onChange={setPages} />
-          <p className="text-xs text-muted-foreground">Research reads up to 6 (Settings, Website reading).</p>
-        </div>
+      <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
+        <p className="text-sm font-medium">Companies verified per month</p>
+        <NumberField
+          label="Companies verified per month"
+          value={draft.companiesPerMonth}
+          disabled={!canEdit}
+          onChange={(n) => setDraft((d) => ({ ...d, companiesPerMonth: Math.round(n) }))}
+        />
       </div>
-      <ul className="divide-y divide-rule rounded-md border text-sm" aria-label="Verification sources">
-        <li className="flex items-baseline gap-3 px-3 py-1.5">
-          <span className="flex-1">Claude&apos;s fit score ({MODEL_NAME[score.model ?? ""] ?? score.model}, set on the server)</span>
-          <span className="tabular-nums">{formatUsd(score.priceUsd)}</span>
-        </li>
-        {pages && (
-          <li className="flex items-baseline gap-3 px-3 py-1.5">
-            <span className="flex-1">
-              Website pages ({count(draft.pagesPerCompany)} × {pages.priceUsd > 0 ? formatUsd(pages.priceUsd) : "not set"})
-            </span>
-            <span className="tabular-nums">{formatUsd(pages.priceUsd * draft.pagesPerCompany)}</span>
-          </li>
-        )}
-        {instagram && (
-          <li className="flex items-baseline gap-3 px-3 py-1.5">
-            <span className="flex-1">Instagram profile check{instagram.priceUsd > 0 ? "" : " (not set)"}</span>
-            <span className="tabular-nums">{formatUsd(instagram.priceUsd)}</span>
-          </li>
-        )}
-        <li className="flex items-baseline gap-3 bg-muted/40 px-3 py-1.5 font-medium">
-          <span className="flex-1">Price per company</span>
-          <span className="tabular-nums">{formatUsd(perCompany)}</span>
-        </li>
-      </ul>
-      {missing.length > 0 && <p className="text-xs text-muted-foreground">Not counted yet, no price set: {missing.join(", ")}.</p>}
+      <div className="grid gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem_9rem]">
+        <span className="text-xs text-muted-foreground">Source</span>
+        <span className="hidden text-right text-xs text-muted-foreground sm:block">Per company</span>
+        <span className="hidden text-right text-xs text-muted-foreground sm:block">Price each</span>
+      </div>
+      {sources.map((item) => (
+        <SourceLine
+          key={item.id}
+          item={item}
+          per="per company"
+          canEdit={canEdit && item.id !== SCORE}
+          onQuantity={(n) => update({ [item.id]: { quantity: n, enabled: true } })}
+        />
+      ))}
+      <p className="flex items-baseline justify-between rounded-md bg-muted/40 px-3 py-1.5 text-sm font-medium">
+        <span>Price per company</span>
+        <span className="tabular-nums">{formatUsd(perCompany)}</span>
+      </p>
     </div>
   )
 }
 
-/** Lead analysis: each lead's recent LinkedIn and Instagram posts, read to find something to open the email
- * with. How many posts per lead from each, and what one lead costs. */
+/** Lead analysis: posts read to find something specific to open the email with. How many of each per lead,
+ * and what one lead costs. */
 function Analysis({
   draft,
   canEdit,
@@ -363,15 +372,9 @@ function Analysis({
   canEdit: boolean
   update: (patches: Record<string, Partial<CostItem>>) => void
 }) {
-  const sources = [
-    { item: draft.items.find((i) => i.id === ANALYSIS.linkedin), label: "LinkedIn posts per lead" },
-    { item: draft.items.find((i) => i.id === ANALYSIS.instagram), label: "Instagram posts per lead" },
-  ].filter((s): s is { item: CostItem; label: string } => !!s.item)
+  const sources = draft.items.filter((i) => i.category === ANALYSIS)
   if (sources.length === 0) return null
-  const posts = (i: CostItem) => (i.enabled ? i.quantity : 0)
-  const perLead = sources.reduce((sum, { item }) => sum + posts(item) * item.priceUsd, 0)
-  const missing = sources.filter(({ item }) => posts(item) > 0 && item.priceUsd === 0).map(({ item }) => item.name)
-
+  const perLead = sources.reduce((sum, i) => sum + (i.enabled ? i.quantity * i.priceUsd : 0), 0)
   return (
     <div className="space-y-3 border-t border-rule pt-4">
       <div className="flex items-baseline gap-2">
@@ -379,36 +382,26 @@ function Analysis({
         <span className="text-xs font-medium tabular-nums">{money(perLead * draft.leadsPerMonth)} a month</span>
       </div>
       <p className="text-xs text-muted-foreground">
-        Each lead&apos;s recent posts, read to find something specific to open the email with. Settings default to 5 per source.
+        Posts read to find something specific to open the email with. Settings default to 5 per source.
       </p>
-      <div className="grid gap-x-3 gap-y-3 sm:grid-cols-2">
-        {sources.map(({ item, label }) => (
-          <div key={item.id} className="space-y-1.5">
-            <p className="text-sm">{label}</p>
-            <NumberField
-              label={label}
-              value={posts(item)}
-              disabled={!canEdit}
-              onChange={(n) => update({ [item.id]: { quantity: Math.round(n), basis: "lead", enabled: true } })}
-            />
-          </div>
-        ))}
+      <div className="grid gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem_9rem]">
+        <span className="text-xs text-muted-foreground">Source</span>
+        <span className="hidden text-right text-xs text-muted-foreground sm:block">Per lead</span>
+        <span className="hidden text-right text-xs text-muted-foreground sm:block">Price each</span>
       </div>
-      <ul className="divide-y divide-rule rounded-md border text-sm" aria-label="Lead analysis sources">
-        {sources.map(({ item }) => (
-          <li key={item.id} className="flex items-baseline gap-3 px-3 py-1.5">
-            <span className="flex-1">
-              {item.name} ({count(posts(item))} × {item.priceUsd > 0 ? formatUsd(item.priceUsd) : "not set"})
-            </span>
-            <span className="tabular-nums">{formatUsd(posts(item) * item.priceUsd)}</span>
-          </li>
-        ))}
-        <li className="flex items-baseline gap-3 bg-muted/40 px-3 py-1.5 font-medium">
-          <span className="flex-1">Price per lead</span>
-          <span className="tabular-nums">{formatUsd(perLead)}</span>
-        </li>
-      </ul>
-      {missing.length > 0 && <p className="text-xs text-muted-foreground">Not counted yet, no price set: {missing.join(", ")}.</p>}
+      {sources.map((item) => (
+        <SourceLine
+          key={item.id}
+          item={item}
+          per="per lead"
+          canEdit={canEdit}
+          onQuantity={(n) => update({ [item.id]: { quantity: Math.round(n), basis: "lead", enabled: true } })}
+        />
+      ))}
+      <p className="flex items-baseline justify-between rounded-md bg-muted/40 px-3 py-1.5 text-sm font-medium">
+        <span>Price per lead</span>
+        <span className="tabular-nums">{formatUsd(perLead)}</span>
+      </p>
     </div>
   )
 }
