@@ -22,6 +22,7 @@ import {
   Target,
   UserCog,
   Users,
+  Mails,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -83,6 +84,7 @@ export function AppSidebar() {
     { href: "/feedback", label: "Feedback", icon: MessageSquareText },
     { href: "/examples", label: "Example emails", icon: Mail },
     { href: "/leads", label: "Leads", icon: Users },
+    { href: "/mailboxes", label: "Mailboxes", icon: Mails },
     { href: "/prompts", label: "Prompts", icon: FileText },
     { href: "/usage", label: "Usage", icon: Gauge },
     ...(isAdmin ? [{ href: "/users", label: "Users", icon: UserCog }] : []),

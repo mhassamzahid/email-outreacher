@@ -182,6 +182,69 @@ export const deleteWorkspace = (id: string) => api<void>(`/workspaces/${id}`, { 
 export const setWorkspaceMembersApi = (id: string, userIds: string[]) =>
   api<void>(`/workspaces/${id}/members`, { method: "PUT", body: { userIds } })
 
+// ---------- Sending: mailboxes (CheapSequencer) and their domains (CheapInboxes). Read-only. ----------
+
+export interface Mailbox {
+  id: string
+  email: string
+  name: string
+  domain: string
+  provider: string
+  status: string
+  authStatus: string
+  needsAttention: boolean
+  lastError: string | null
+  tags: string[]
+  campaignDaily: number
+  warmupDaily: number
+  totalDaily: number
+  warmupEnabled: boolean
+  warmupState: string | null
+  warmupStartedAt: string | null
+  lastSentAt: string | null
+  todaySends: number
+  todayReplies: number
+  todayFailed: number
+  todayInbox: number
+  todaySpam: number
+  todaySaved: number
+  todayUnknown: number
+}
+
+export interface SendingDomain {
+  domain: string
+  status: string
+  health: string
+  problems: string[]
+}
+
+export interface Mailboxes {
+  summary: {
+    connected: number
+    connectedLimit: number | null
+    sendsUsed: number
+    sendsLimit: number | null
+    periodEndsAt: string | null
+    campaignDaily: number
+    warmupTodaySends: number
+    warmupTodayInbox: number
+    warmupTodaySpam: number
+    warmupTodaySaved: number
+    warmupWeekSent: number
+    warmupWeekInbox: number
+    warmupWeekSpam: number
+    warmupWeekSaved: number
+    needingReview: number
+  }
+  mailboxes: Mailbox[]
+  domains: SendingDomain[]
+  campaigns: { name: string; status: string; dailySendCap: number | null }[]
+  /** Why part of the page is missing: a key not set, or a service down. */
+  errors: string[]
+}
+
+export const fetchMailboxes = () => api<Mailboxes>("/mailboxes")
+
 // ---------- Sending: CheapSequencer campaigns, queueing approved emails, follow-ups ----------
 
 export interface SendingSettings {
