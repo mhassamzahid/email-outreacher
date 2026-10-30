@@ -16,7 +16,7 @@ export function currentVersion(versions: PromptVersion[], template: PromptTempla
 /** ICPs that use a template, explicitly or through the default. */
 export function icpsUsingTemplate(icps: ICP[], template: PromptTemplate): ICP[] {
   return icps.filter((icp) => {
-    if (template.kind === "score") return false
+    if (!isIcpPromptKind(template.kind)) return false
     const id = icp[ICP_PROMPT_FIELD[template.kind]]
     return id === template.id || (id === null && template.isDefault)
   })
@@ -67,3 +67,11 @@ export const ICP_PROMPT_FIELD = {
 } as const satisfies Partial<Record<PromptKind, keyof ICP>>
 
 export type IcpPromptKind = keyof typeof ICP_PROMPT_FIELD
+
+/** Scoring is chosen in Settings and the follow-ups always use their default, so only these are picked per ICP. */
+export function isIcpPromptKind(kind: PromptKind): kind is IcpPromptKind {
+  return kind in ICP_PROMPT_FIELD
+}
+
+/** Follow-up prompts: every ICP uses the default one. */
+export const FOLLOWUP_KINDS: PromptKind[] = ["followup2", "followup3"]

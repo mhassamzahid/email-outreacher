@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { KIND_LABEL, PROMPT_STARTERS } from "@/lib/prompt-starters"
-import { ICP_PROMPT_FIELD, resolveScoringTemplate, resolveTemplate } from "@/lib/selectors"
+import { FOLLOWUP_KINDS, ICP_PROMPT_FIELD, isIcpPromptKind, resolveScoringTemplate, resolveTemplate } from "@/lib/selectors"
 import { useStore, type VersionDraft } from "@/lib/store"
 import type { PromptKind, PromptTemplate } from "@/lib/types"
 
@@ -104,7 +104,7 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
       toast.error("Couldn't create it", { description: e instanceof Error ? e.message : undefined })
       return
     }
-    if (kind !== "score") {
+    if (isIcpPromptKind(kind)) {
       const field = ICP_PROMPT_FIELD[kind]
       const failed = (await Promise.allSettled([...icpIds].map((id) => updateIcp(id, { [field]: tpl.id })))).filter(
         (r) => r.status === "rejected",
@@ -222,7 +222,9 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
               <CardDescription>
                 {kind === "score"
                   ? "Scoring prompts apply to every ICP from Settings."
-                  : "Pick the ICPs that should switch to this prompt. You can change this later on each ICP's Prompts tab."}
+                  : FOLLOWUP_KINDS.includes(kind)
+                    ? "Every ICP's follow-ups are written with the default follow-up prompt. Make this one the default to use it."
+                    : "Pick the ICPs that should switch to this prompt. You can change this later on each ICP's Prompts tab."}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -234,7 +236,7 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
                   </div>
                   <Switch id="use-scoring" checked={useForScoring} onCheckedChange={setUseForScoring} />
                 </div>
-              ) : (
+              ) : !isIcpPromptKind(kind) ? null : (
                 <ul className="space-y-2">
                   {icps.map((icp) => {
                     const now = resolveTemplate(templates, icp, kind)

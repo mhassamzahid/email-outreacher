@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { shortDate } from "@/lib/format"
-import { ICP_PROMPT_FIELD, type IcpPromptKind, icpsUsingTemplate, resolveScoringTemplate } from "@/lib/selectors"
+import { FOLLOWUP_KINDS, ICP_PROMPT_FIELD, type IcpPromptKind, icpsUsingTemplate, isIcpPromptKind, resolveScoringTemplate } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import type { PromptKind, PromptTemplate } from "@/lib/types"
 
@@ -41,6 +41,16 @@ const SECTIONS: { kind: PromptKind; title: string; description: string }[] = [
     title: "Email scoring",
     description: "Scores every drafted email from 0 to 100. Decides what waits for review and what can be sent automatically.",
   },
+  {
+    kind: "followup2",
+    title: "Follow-up (email 2)",
+    description: "Written just before it's due, only for leads who haven't replied. The default is used for every ICP.",
+  },
+  {
+    kind: "followup3",
+    title: "Follow-up (email 3)",
+    description: "The last email, closing the loop. Written just before it's due, only if there's still no reply.",
+  },
 ]
 
 export default function PromptsPage() {
@@ -54,7 +64,7 @@ export default function PromptsPage() {
   const lockReason = (t: PromptTemplate) => {
     if (t.isDefault) return "It's the default. Make another prompt the default first."
     if (t.kind === "score" && settings.scoring.promptId === t.id) return "It's the scoring prompt chosen in Settings."
-    const users = t.kind === "score" ? [] : icps.filter((i) => i[ICP_PROMPT_FIELD[t.kind as IcpPromptKind]] === t.id)
+    const users = isIcpPromptKind(t.kind) ? icps.filter((i) => i[ICP_PROMPT_FIELD[t.kind as IcpPromptKind]] === t.id) : []
     if (users.length) return `It's used by ${users.map((i) => i.name).join(", ")}.`
     return ""
   }
@@ -156,6 +166,14 @@ export default function PromptsPage() {
                                       All ICPs, set in Settings
                                     </Badge>
                                   </Link>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Not used</span>
+                                )
+                              ) : FOLLOWUP_KINDS.includes(t.kind) ? (
+                                t.isDefault ? (
+                                  <Badge variant="outline" className="font-normal">
+                                    All ICPs
+                                  </Badge>
                                 ) : (
                                   <span className="text-xs text-muted-foreground">Not used</span>
                                 )

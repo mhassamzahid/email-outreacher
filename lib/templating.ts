@@ -52,6 +52,30 @@ const ALIASES: Partial<Record<PromptKind, string[]>> = {
 
 const EMAIL_VARS = ["email.subject", "email.body"]
 
+/** Follow-ups are written later, from what the lead was already sent. */
+const FOLLOWUP_VARS = [
+  "lead.firstName",
+  "lead.lastName",
+  "lead.fullName",
+  "lead.title",
+  "lead.company",
+  "lead.website",
+  "icp.name",
+  "icp.pains",
+  "icp.offer",
+  "icp.proof",
+  "icp.cta",
+  "icp.tone",
+  "icp.wordsToAvoid",
+  "hooks",
+  "hook.text",
+  "examples.samples",
+  "email1.subject",
+  "email1.body",
+  "email2.body",
+  "followup.step",
+]
+
 /**
  * What we know about the lead's company, filled by the backend: our research for Apollo companies,
  * Lead Intel's stored data for Lead Intel ones. company.summary is Company Verification's verdict.
@@ -94,6 +118,7 @@ const VERIFY_VARS = [
 /** Variables offered in the editor sidebar for each prompt kind. `lead.extra.*` is matched by prefix. */
 export function availableVariables(kind: PromptKind): string[] {
   if (kind === "verify") return VERIFY_VARS
+  if (kind === "followup2" || kind === "followup3") return [...FOLLOWUP_VARS, ...PRODUCT_VARS]
   const person = [...ICP_VARS, ...LEAD_VARS, "lead.extra.<column>", ...POST_VARS, ...COMPANY_VARS, "company.summary", ...PRODUCT_VARS]
   if (kind === "hook") return person
   if (kind === "email") return [...person, ...HOOK_VARS, ...EXAMPLE_VARS]
@@ -102,7 +127,7 @@ export function availableVariables(kind: PromptKind): string[] {
 }
 
 export function isKnownVariable(name: string, kind: PromptKind): boolean {
-  if (kind !== "verify" && name.startsWith("lead.extra.") && name.length > "lead.extra.".length) return true
+  if (kind !== "verify" && !kind.startsWith("followup") && name.startsWith("lead.extra.") && name.length > "lead.extra.".length) return true
   return availableVariables(kind).includes(name) || (ALIASES[kind] ?? []).includes(name)
 }
 

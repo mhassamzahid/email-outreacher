@@ -1,7 +1,7 @@
 import { NewPromptForm } from "@/components/prompt/new-prompt-form"
 import type { PromptKind } from "@/lib/types"
 
-const KINDS: PromptKind[] = ["verify", "hook", "email", "score"]
+const KINDS: PromptKind[] = ["verify", "hook", "email", "score", "followup2", "followup3"]
 
 export default async function NewPromptPage({ searchParams }: { searchParams: Promise<{ kind?: string | string[] }> }) {
   const { kind } = await searchParams

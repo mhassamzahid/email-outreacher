@@ -115,11 +115,58 @@ Emails the reviewer rated bad:
     maxTokens: 4096,
     maxPosts: null,
   },
-}
+
+  followup2: {
+    systemPrompt:
+      "You write the second email in a short cold sequence, as a reply in the same thread. The person hasn't answered the first one. Add one new reason to reply (a different hook, or one concrete way the product helps someone like them), never repeat the first email, and end with one easy question. 35 to 70 words, contractions, no em dashes, no links, no invented facts, no sign-off. Return the body and a confidence from 0 to 100.",
+    userPrompt: `Write the follow-up to {{lead.firstName}} ({{lead.title}} at {{lead.company}}).
+
+The first email, already sent:
+Subject: {{email1.subject}}
+{{email1.body}}
+
+Other hooks we found:
+{{hooks}}
+
+What we sell: {{product.name}}: {{product.value}}
+Proof (word for word, or not at all): {{product.proof}}
+Their pains: {{icp.pains}}
+Never use: {{icp.wordsToAvoid}}
+
+Example emails in our voice:
+{{examples.samples}}`,
+    temperature: 0.7,
+    maxTokens: 4096,
+    maxPosts: null,
+  },
+  followup3: {
+    systemPrompt:
+      "You write the third and last email in a short cold sequence, as a reply in the same thread. The person hasn't answered the first two. Close the loop politely, leave one easy door open from the offer, and end with a yes-or-no question or an easy out. 25 to 55 words, no em dashes, no pressure, no invented facts, no sign-off. Return the body and a confidence from 0 to 100.",
+    userPrompt: `Write the last email to {{lead.firstName}} at {{lead.company}}.
+
+The first email:
+Subject: {{email1.subject}}
+{{email1.body}}
+
+The second email:
+{{email2.body}}
+
+Easiest next step: {{product.offer}}
+Call to action: {{product.cta}}
+Tone: {{icp.tone}}
+
+Example emails in our voice:
+{{examples.samples}}`,
+    temperature: 0.7,
+    maxTokens: 4096,
+    maxPosts: null,
+  },}
 
 export const KIND_LABEL: Record<PromptKind, string> = {
   verify: "Company verification",
   hook: "Hook selection",
   email: "Email generation",
   score: "Email scoring",
+  followup2: "Follow-up (email 2)",
+  followup3: "Follow-up (email 3)",
 }
