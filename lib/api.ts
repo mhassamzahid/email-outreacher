@@ -722,11 +722,15 @@ export interface CostEstimate {
   emailsPerLead: number
   /** Replies per 100 leads; 0 until set. */
   replyRatePct: number
+  /** Website pages company verification reads per company. */
+  pagesPerCompany: number
   items: CostItem[]
 }
 
 export interface CostReference {
   claudePrices: { model: string; inputPerMtok: number; outputPerMtok: number }[]
+  /** The model company verification uses (set on the server). */
+  scoringModel: string
   /** Your average per use of each Claude operation over the last 90 days. */
   measured: { action: string; uses: number; tokensIn: number; tokensOut: number; costUsd: number }[]
   since: string

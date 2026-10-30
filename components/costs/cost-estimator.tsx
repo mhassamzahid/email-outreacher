@@ -32,6 +32,9 @@ const MODEL_NAME = Object.fromEntries(MODELS.map(([id, name]) => [id, `Claude ${
 /** The lines that write emails: the model choice applies to both. */
 const WRITING = ["email-generation", "follow-up"]
 const FOLLOW_UP = "follow-up"
+/** Company verification's three parts: Claude's score, the website pages it reads, its Instagram check. */
+const VERIFY = { score: "verification", pages: "website-pages", instagram: "instagram-profile" } as const
+const VERIFY_IDS: string[] = Object.values(VERIFY)
 /** A subscription: one price a month, nothing to count. */
 const isPlan = (i: CostItem) => i.basis === "month" && i.unitLabel === "per month"
 
@@ -170,7 +173,9 @@ function Setup({
     <section className="space-y-5 rounded-lg border p-5">
       <div>
         <h2 className="text-[15px] font-semibold">Your setup</h2>
-        <p className="text-xs text-muted-foreground">Type how many of each, and its price. The estimate updates as you go.</p>
+        <p className="text-xs text-muted-foreground">
+          Type how many of each. Prices are read-only: they come from Coldbrew, and missing ones are set on the server (COST_PRICES).
+        </p>
       </div>
 
       <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-[minmax(0,1fr)_9rem] sm:items-center">
@@ -211,7 +216,9 @@ function Setup({
         </div>
       </div>
 
-      {byCategory(draft).map((group) => (
+      <Verification draft={draft} canEdit={canEdit} update={update} setDraft={setDraft} />
+
+      {byCategory({ ...draft, items: draft.items.filter((i) => !VERIFY_IDS.includes(i.id)) }).map((group) => (
         <div key={group.category} className="space-y-2.5 border-t border-rule pt-4">
           <div className="grid gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem_9rem]">
             <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{group.category}</h3>
@@ -240,22 +247,103 @@ function Setup({
                   onChange={(n) => setQuantity(item, n)}
                 />
               )}
-              {item.model ? (
-                <p className="pt-2 text-right text-sm text-muted-foreground tabular-nums">{reference ? formatUsd(item.priceUsd) : "…"}</p>
-              ) : (
-                <NumberField
-                  label={`${item.name}: price ${item.unitLabel}`}
-                  prefix="$"
-                  value={item.priceUsd}
-                  disabled={!canEdit}
-                  onChange={(n) => update({ [item.id]: { priceUsd: n } })}
-                />
-              )}
+              <Price item={item} loading={!!item.model && !reference} />
             </div>
           ))}
         </div>
       ))}
     </section>
+  )
+}
+
+/** A line's price, read-only. */
+function Price({ item, loading }: { item: CostItem; loading?: boolean }) {
+  return (
+    <p className="pt-2 text-right text-sm tabular-nums" title={item.note}>
+      {loading ? "…" : item.priceUsd > 0 ? formatUsd(item.priceUsd) : <span className="text-muted-foreground">Not set</span>}
+      {item.priceUsd > 0 && !isPlan(item) && <span className="block text-xs text-muted-foreground">{item.unitLabel}</span>}
+    </p>
+  )
+}
+
+/** Company verification as one thing: how many companies, how many pages each, and what one costs. */
+function Verification({
+  draft,
+  canEdit,
+  update,
+  setDraft,
+}: {
+  draft: CostEstimate
+  canEdit: boolean
+  update: (patches: Record<string, Partial<CostItem>>) => void
+  setDraft: (fn: (d: CostEstimate) => CostEstimate) => void
+}) {
+  const line = (id: string) => draft.items.find((i) => i.id === id)
+  const score = line(VERIFY.score)
+  const pages = line(VERIFY.pages)
+  const instagram = line(VERIFY.instagram)
+  if (!score) return null
+  const companies = score.enabled ? score.quantity : 0
+  const perCompany = score.priceUsd + (pages?.priceUsd ?? 0) * draft.pagesPerCompany + (instagram?.priceUsd ?? 0)
+  const missing = [pages, instagram].filter((i): i is CostItem => !!i && i.priceUsd === 0).map((i) => i.name)
+
+  const setCompanies = (n: number) =>
+    update({
+      [VERIFY.score]: { quantity: n, basis: "month", enabled: true },
+      ...(pages && { [VERIFY.pages]: { quantity: n * draft.pagesPerCompany, basis: "month", enabled: true } }),
+      ...(instagram && { [VERIFY.instagram]: { quantity: n, basis: "month", enabled: true } }),
+    })
+  const setPages = (p: number) => {
+    setDraft((d) => ({ ...d, pagesPerCompany: p }))
+    if (pages) update({ [VERIFY.pages]: { quantity: companies * p, basis: "month", enabled: true } })
+  }
+
+  return (
+    <div className="space-y-3 border-t border-rule pt-4">
+      <div className="flex items-baseline gap-2">
+        <h3 className="flex-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Company verification</h3>
+        <span className="text-xs font-medium tabular-nums">{money(companies * perCompany)} a month</span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Before you contact a company, Claude reads its website and Instagram and scores how well it fits.
+      </p>
+      <div className="grid gap-x-3 gap-y-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <p className="text-sm">Companies verified per month</p>
+          <NumberField label="Companies verified per month" value={companies} disabled={!canEdit} onChange={(n) => setCompanies(Math.round(n))} />
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-sm">Website pages per company</p>
+          <NumberField label="Website pages per company" value={draft.pagesPerCompany} disabled={!canEdit} onChange={setPages} />
+          <p className="text-xs text-muted-foreground">Research reads up to 6 (Settings, Website reading).</p>
+        </div>
+      </div>
+      <ul className="divide-y divide-rule rounded-md border text-sm">
+        <li className="flex items-baseline gap-3 px-3 py-1.5">
+          <span className="flex-1">Claude&apos;s score ({MODEL_NAME[score.model ?? ""] ?? score.model}, set on the server)</span>
+          <span className="tabular-nums">{formatUsd(score.priceUsd)}</span>
+        </li>
+        {pages && (
+          <li className="flex items-baseline gap-3 px-3 py-1.5">
+            <span className="flex-1">
+              Website pages ({count(draft.pagesPerCompany)} × {pages.priceUsd > 0 ? formatUsd(pages.priceUsd) : "not set"})
+            </span>
+            <span className="tabular-nums">{formatUsd(pages.priceUsd * draft.pagesPerCompany)}</span>
+          </li>
+        )}
+        {instagram && (
+          <li className="flex items-baseline gap-3 px-3 py-1.5">
+            <span className="flex-1">Instagram profile check{instagram.priceUsd > 0 ? "" : " (not set)"}</span>
+            <span className="tabular-nums">{formatUsd(instagram.priceUsd)}</span>
+          </li>
+        )}
+        <li className="flex items-baseline gap-3 bg-muted/40 px-3 py-1.5 font-medium">
+          <span className="flex-1">Price per company</span>
+          <span className="tabular-nums">{formatUsd(perCompany)}</span>
+        </li>
+      </ul>
+      {missing.length > 0 && <p className="text-xs text-muted-foreground">Not counted yet, no price set: {missing.join(", ")}.</p>}
+    </div>
   )
 }
 
@@ -304,7 +392,7 @@ function Summary({ draft }: { draft: CostEstimate }) {
               </li>
             ))}
           </ul>
-          <p className="mt-1.5 text-xs text-muted-foreground">Type their prices in Your setup.</p>
+          <p className="mt-1.5 text-xs text-muted-foreground">Their prices are set on the server, in COST_PRICES.</p>
         </div>
       )}
     </section>
