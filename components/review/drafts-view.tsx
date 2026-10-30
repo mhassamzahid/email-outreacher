@@ -2,9 +2,10 @@
 
 import Link from "next/link"
 import { useState } from "react"
-import { Check, ExternalLink, Inbox, RotateCcw, Save, Sparkles, X } from "lucide-react"
+import { Check, ExternalLink, Inbox, RotateCcw, Save, Send, Sparkles, X } from "lucide-react"
 import { toast } from "sonner"
 import { BackendError, WorkspaceGate } from "@/components/companies/backend-state"
+import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { FeedbackControl } from "@/components/feedback/feedback-control"
 import { Pill, type PillTone } from "@/components/status"
@@ -15,13 +16,14 @@ import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { type EmailDraft, type EmailStatus, fetchEmails, generateEmails, updateEmail, useApi } from "@/lib/api"
+import { type EmailDraft, type EmailStatus, fetchEmails, generateEmails, queueEmails, updateEmail, useApi } from "@/lib/api"
 import { formatUsd, shortDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 const FILTERS: { value: string; label: string; test: (s: EmailStatus) => boolean }[] = [
   { value: "review", label: "To review", test: (s) => s === "draft" || s === "edited" },
   { value: "approved", label: "Approved", test: (s) => s === "approved" },
+  { value: "sequence", label: "In sequence", test: (s) => s === "queued" || s === "sent" },
   { value: "skipped", label: "Skipped", test: (s) => s === "skipped" },
   { value: "all", label: "All", test: () => true },
 ]
@@ -30,12 +32,33 @@ const STATUS: Record<EmailStatus, { label: string; tone: PillTone }> = {
   draft: { label: "Draft", tone: "info" },
   edited: { label: "Edited", tone: "info" },
   approved: { label: "Approved", tone: "positive" },
+  queued: { label: "Queued", tone: "info" },
   sent: { label: "Sent", tone: "neutral" },
   skipped: { label: "Skipped", tone: "neutral" },
 }
 
 const name = (d: EmailDraft) => `${d.lead.firstName} ${d.lead.lastName}`.trim() || d.lead.email || "Unnamed lead"
 const errorText = (e: unknown) => (e instanceof Error ? e.message : undefined)
+
+/** Put approved emails into their ICP's CheapSequencer campaign; says what was skipped and why. */
+async function queue(wsId: string, ids: string[]) {
+  const id = toast.loading(`Queueing ${ids.length} email${ids.length === 1 ? "" : "s"}…`)
+  try {
+    const r = await queueEmails(wsId, ids)
+    const skipped = r.results.filter((x) => x.status === "skipped")
+    const reasons = [...new Set(skipped.map((x) => x.reason))].slice(0, 3).join(" ")
+    if (r.queued)
+      toast.success(`${r.queued} queued in CheapSequencer`, {
+        id,
+        description: `Nothing sends until the campaign is activated there.${skipped.length ? ` ${skipped.length} skipped: ${reasons}` : ""}`,
+      })
+    else toast.error("None were queued", { id, description: reasons || undefined })
+    return r.queued > 0
+  } catch (e) {
+    toast.error("Couldn't queue them", { id, description: errorText(e) })
+    return false
+  }
+}
 
 /** Real drafted emails: what Claude wrote, why, and the review actions. Nothing here sends email. */
 export function DraftsView({ icpId }: { icpId?: string }) {
@@ -46,6 +69,8 @@ function Drafts({ wsId, icpId }: { wsId: string; icpId?: string }) {
   const emails = useApi(() => fetchEmails(wsId), [wsId])
   const [filter, setFilter] = useState("review")
   const [openId, setOpenId] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
+  const [queueing, setQueueing] = useState(false)
 
   if (emails.error && !emails.data) return <BackendError message={emails.error} onRetry={emails.reload} />
   if (!emails.data) return <TableSkeleton rows={6} />
@@ -53,6 +78,13 @@ function Drafts({ wsId, icpId }: { wsId: string; icpId?: string }) {
   const list = emails.data.filter((d) => !icpId || d.lead.icpId === icpId)
   const visible = list.filter((d) => FILTERS.find((f) => f.value === filter)!.test(d.status))
   const open = list.find((d) => d.id === openId) ?? null
+  const approved = list.filter((d) => d.status === "approved")
+
+  const queueApproved = async () => {
+    setQueueing(true)
+    if (await queue(wsId, approved.map((d) => d.id))) emails.reload()
+    setQueueing(false)
+  }
 
   if (list.length === 0)
     return (
@@ -70,23 +102,41 @@ function Drafts({ wsId, icpId }: { wsId: string; icpId?: string }) {
 
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Filter drafts" className="flex flex-wrap gap-1.5">
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            type="button"
-            role="tab"
-            aria-selected={filter === f.value}
-            onClick={() => setFilter(f.value)}
-            className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
-              filter === f.value ? "border-data bg-data/10 font-medium" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-            )}
-          >
-            {f.label} <span className="tabular-nums opacity-70">{list.filter((d) => f.test(d.status)).length}</span>
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <div role="tablist" aria-label="Filter drafts" className="flex flex-wrap gap-1.5">
+          {FILTERS.map((f) => (
+            <button
+              key={f.value}
+              type="button"
+              role="tab"
+              aria-selected={filter === f.value}
+              onClick={() => setFilter(f.value)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-[13px] transition-colors outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                filter === f.value ? "border-data bg-data/10 font-medium" : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+              )}
+            >
+              {f.label} <span className="tabular-nums opacity-70">{list.filter((d) => f.test(d.status)).length}</span>
+            </button>
+          ))}
+        </div>
+        {approved.length > 0 && (
+          <Button size="sm" className="ml-auto" disabled={queueing} onClick={() => setConfirming(true)}>
+            <Send /> Queue {approved.length} for sending
+          </Button>
+        )}
       </div>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={`Queue ${approved.length} approved email${approved.length === 1 ? "" : "s"}?`}
+        description="Each lead goes into their ICP's campaign in CheapSequencer, with generic follow-ups that Coldbrew personalizes just before they're due. Nothing sends until you activate the campaign in CheapSequencer. Queued emails can't be edited here."
+        confirmLabel="Queue them"
+        onConfirm={() => {
+          setConfirming(false)
+          void queueApproved()
+        }}
+      />
 
       {visible.length === 0 ? (
         <EmptyState icon={Inbox} title="Nothing here" description="Try another filter." />
@@ -166,7 +216,8 @@ function DraftSheet({
   const [instruction, setInstruction] = useState("")
   const [busy, setBusy] = useState("")
   const dirty = subject.trim() !== draft.subject || body.trim() !== draft.body
-  const sent = draft.status === "sent"
+  // Once queued, the text is in CheapSequencer, so it's no longer edited here.
+  const sent = draft.status === "sent" || draft.status === "queued"
 
   const save = async (status?: "draft" | "approved" | "skipped") => {
     setBusy(status ?? "save")
@@ -250,9 +301,27 @@ function DraftSheet({
                   <RotateCcw /> Back to review
                 </Button>
               )}
+              {draft.status === "approved" && !dirty && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!!busy}
+                  onClick={async () => {
+                    setBusy("queue")
+                    if (await queue(wsId, [draft.id])) onChanged()
+                    setBusy("")
+                  }}
+                >
+                  <Send /> Queue for sending
+                </Button>
+              )}
             </div>
           )}
-          <p className="text-xs text-muted-foreground">Approving marks it ready. Nothing is sent from here.</p>
+          <p className="text-xs text-muted-foreground">
+            {draft.status === "queued"
+              ? "Queued in its ICP's CheapSequencer campaign. Follow-ups are written just before they're due, only if there's no reply."
+              : "Approving marks it ready. Queueing puts it in CheapSequencer, which only sends once the campaign is activated there."}
+          </p>
         </section>
 
         {draft.scoreReasons.length > 0 && (

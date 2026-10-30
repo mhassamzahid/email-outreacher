@@ -7,6 +7,7 @@ import { AutoSendSettings } from "@/components/auto-send-settings"
 import { FeedbackSettings } from "@/components/feedback/feedback-settings"
 import { ExclusionsSettings } from "@/components/settings/exclusions-settings"
 import { ResearchSettings } from "@/components/settings/research-settings"
+import { SendingSettings } from "@/components/settings/sending-settings"
 import { PageHeader } from "@/components/page-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,6 +24,8 @@ const CONNECTIONS = [
   { name: "Apollo", purpose: "Finding companies and people, revealing emails", env: "APOLLO_API_KEY" },
   { name: "Apify", purpose: "LinkedIn people and posts, Instagram profiles and posts", env: "APIFY_TOKEN" },
   { name: "Jina", purpose: "Reading websites our own crawler can't (optional)", env: "JINA_API_KEY" },
+  { name: "CheapSequencer", purpose: "Campaigns, sending and warmup", env: "CHEAPSEQUENCER_API_KEY" },
+  { name: "CheapInboxes", purpose: "Mailboxes and their domains", env: "CHEAPINBOXES_API_KEY" },
 ]
 
 const WARN_AT = 0.8
@@ -122,6 +125,13 @@ export default function SettingsPage() {
             description="Every drafted email gets an AI lead score. Below the threshold a person reviews it; at or above it, with auto-send on, it goes out on its own."
           >
             <AutoSendSettings />
+          </Panel>
+          <Panel
+            id="sending"
+            title="Sending"
+            description="Every email ends with the sender's name, this company and its address. Saving writes them into each Coldbrew campaign in CheapSequencer that isn't sending."
+          >
+            <SendingSettings />
           </Panel>
           <Panel
             id="feedback"

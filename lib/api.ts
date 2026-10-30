@@ -182,6 +182,58 @@ export const deleteWorkspace = (id: string) => api<void>(`/workspaces/${id}`, { 
 export const setWorkspaceMembersApi = (id: string, userIds: string[]) =>
   api<void>(`/workspaces/${id}/members`, { method: "PUT", body: { userIds } })
 
+// ---------- Sending: CheapSequencer campaigns, queueing approved emails, follow-ups ----------
+
+export interface SendingSettings {
+  senderCompany: string
+  senderAddress: string
+  followupFallback2: string
+  followupFallback3: string
+  followupLeadHours: number
+}
+
+export interface TemplateOutcome {
+  campaign: string
+  status: "updated" | "unchanged" | "skipped"
+  reason: string | null
+}
+
+export const fetchSendingSettings = (workspaceId: string) => api<SendingSettings>("/sending/settings", { workspaceId })
+
+/** Saves, then writes the signature into every Coldbrew campaign that isn't sending. */
+export const saveSendingSettings = (workspaceId: string, body: SendingSettings) =>
+  api<SendingSettings & { templates: TemplateOutcome[] }>("/sending/settings", { workspaceId, method: "PUT", body })
+
+export interface SendingCampaign {
+  id: string
+  name: string
+  status: string
+  dailySendCap: number | null
+  /** Leads Coldbrew put in it. */
+  queued: number
+}
+
+export const fetchSendingCampaigns = (workspaceId: string) => api<SendingCampaign[]>("/sending/campaigns", { workspaceId })
+
+export interface QueueResult {
+  queued: number
+  results: { emailId: string; status: "queued" | "skipped"; reason: string | null; campaign: string | null }[]
+}
+
+/** Put approved first emails into their ICP's campaign. Doesn't activate it or send. */
+export const queueEmails = (workspaceId: string, emailIds: string[]) =>
+  api<QueueResult>("/sending/queue", { workspaceId, method: "POST", body: { emailIds } })
+
+export interface FollowUpRun {
+  checked: number
+  written: number
+  ended: number
+  costUsd: number
+  notes: string[]
+}
+
+export const runFollowUps = (workspaceId: string) => api<FollowUpRun>("/sending/follow-ups/run", { workspaceId, method: "POST" })
+
 // ---------- Do-not-contact list: one for every workspace ----------
 
 export type ExclusionKeyType = "domain" | "email" | "phone" | "place_id" | "name_location"
@@ -508,7 +560,7 @@ export const fetchCompanyContent = (workspaceId: string, companyId: string) =>
 
 // ---------- Emails: hook selection, email generation and review. Nothing here sends email. ----------
 
-export type EmailStatus = "draft" | "edited" | "approved" | "sent" | "skipped"
+export type EmailStatus = "draft" | "edited" | "approved" | "queued" | "sent" | "skipped"
 
 export interface EmailDraft {
   id: string
