@@ -689,6 +689,37 @@ export interface Usage {
 
 export const fetchUsage = (workspaceId: string, days: number) => api<Usage>(`/usage?days=${days}`, { workspaceId })
 
+// ---------- Cost estimator ----------
+
+/** month: a fixed monthly amount; lead: per lead contacted; email: per email sent. */
+export type CostUnit = "month" | "lead" | "email"
+
+export interface CostItem {
+  id: string
+  name: string
+  category: string
+  unit: CostUnit
+  amountUsd: number
+  /** Where the number comes from. */
+  note: string
+  enabled: boolean
+}
+
+export interface CostEstimate {
+  leadsPerMonth: number
+  /** Emails actually sent per lead, on average: 3 when nobody replies. */
+  emailsPerLead: number
+  /** Replies per 100 leads; 0 until set. */
+  replyRatePct: number
+  items: CostItem[]
+}
+
+/** The workspace's saved estimate, or the starting one (only sourced prices filled in). */
+export const fetchCostEstimate = (workspaceId: string) => api<CostEstimate>("/settings/cost-estimate", { workspaceId })
+
+export const saveCostEstimate = (workspaceId: string, body: CostEstimate) =>
+  api<CostEstimate>("/settings/cost-estimate", { workspaceId, method: "PUT", body })
+
 // ---------- Prompts: Company Verification, Hook Selection, Email Generation, Email scoring ----------
 
 export type PromptDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens" | "maxPosts">

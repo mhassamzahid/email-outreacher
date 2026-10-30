@@ -8,6 +8,7 @@ import {
   Check,
   ChevronsUpDown,
   FileText,
+  Calculator,
   Gauge,
   LogOut,
   UserPlus,
@@ -134,6 +135,7 @@ export function AppSidebar() {
           countLabel: `Spent in the last 30 days: ${formatUsd(spent)} of ${formatUsd(settings.monthlyBudgetUsd)} (${Math.round(ratio * 100)}%)`,
           tone: ratio >= 1 ? "text-negative" : ratio >= 0.8 ? "text-warning" : undefined,
         },
+        { href: "/costs", label: "Cost estimator", icon: Calculator },
         ...(isAdmin ? [{ href: "/users", label: "Users", icon: UserCog }] : []),
         { href: "/settings", label: "Settings", icon: Settings },
       ],
@@ -158,7 +160,7 @@ export function AppSidebar() {
       </SidebarHeader>
       <SidebarContent className="gap-0">
         {groups.map((group) => (
-          <SidebarGroup key={group.label} className="py-1">
+          <SidebarGroup key={group.label} className="py-0.5">
             <SidebarGroupLabel className="sidebar-reveal h-6 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
               {group.label}
             </SidebarGroupLabel>
