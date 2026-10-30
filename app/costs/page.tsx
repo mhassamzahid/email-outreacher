@@ -8,7 +8,7 @@ export default function CostsPage() {
     <>
       <PageHeader
         title="Cost estimator"
-        description="What Coldbrew costs a month at your volume. Add, edit or switch off any line; each note says where its number comes from."
+        description="Pick how you run Coldbrew and see what it costs a month, line by line."
       />
       <div className="px-4 pb-10 md:px-8">
         <CostEstimator />
