@@ -8,8 +8,9 @@ import { refusal } from "@/lib/authorized-urls"
 export const maxDuration = 300
 
 const SECRET_HEADER = "X-Coldbrew-Secret"
-// Only what the API reads is forwarded: the session, the workspace, and what the body is.
-const FORWARD_REQUEST = ["authorization", "x-workspace-id", "content-type", "accept"]
+// Only what the API reads is forwarded: the session, the workspace, what the body is, and whether a read
+// must skip the backend's response cache (a page's Refresh).
+const FORWARD_REQUEST = ["authorization", "x-workspace-id", "content-type", "accept", "x-coldbrew-fresh"]
 const FORWARD_RESPONSE = ["content-type", "content-disposition"]
 
 function json(status: number, detail: string) {

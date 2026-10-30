@@ -32,6 +32,8 @@ supabase.auth.onAuthStateChange((_event, session) => {
 
 // The GET requests a load starts before its first await: what its data is made of.
 let recording: string[] | null = null
+// Set while a reload() starts its requests: they skip the backend's response cache too.
+let freshLoad = false
 
 /** A backend call. `body` is sent as JSON; `csv` as a CSV file's text. */
 export async function api<T>(
@@ -39,6 +41,7 @@ export async function api<T>(
   opts: { workspaceId?: string | null; method?: string; body?: unknown; csv?: string } = {},
 ): Promise<T> {
   if (recording && (opts.method ?? "GET") === "GET") recording.push(`${opts.workspaceId ?? ""} ${path}`)
+  const fresh = freshLoad
   const token = await accessToken()
   let res: Response
   try {
@@ -49,6 +52,7 @@ export async function api<T>(
         ...(opts.body !== undefined && { "Content-Type": "application/json" }),
         ...(opts.csv !== undefined && { "Content-Type": "text/csv" }),
         ...(opts.workspaceId && { "X-Workspace-Id": opts.workspaceId }),
+        ...(fresh && { "X-Coldbrew-Fresh": "1" }),
       },
       body: opts.csv !== undefined ? opts.csv : opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
     })
@@ -132,11 +136,13 @@ export function useApi<T>(load: () => Promise<T>, deps: unknown[]) {
     let live = true
     const requests: string[] = []
     recording = requests
+    freshLoad = tick > 0
     let pending: Promise<T>
     try {
       pending = load()
     } finally {
       recording = null
+      freshLoad = false
     }
     // Same requests, same code, same inputs: the same data. No recorded request, no cache.
     const key = requests.length ? `${requests.join("|")}#${load.toString()}#${JSON.stringify(deps)}` : null
