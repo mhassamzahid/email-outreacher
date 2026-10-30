@@ -228,7 +228,7 @@ export function LeadIntelRule({ icp }: { icp: ICP }) {
       <RuleRow label="Industry">{icp.industry}</RuleRow>
       <RuleRow label="Order">
         {icp.priority} <span className="text-muted-foreground">· lower is checked first</span>
-        {!icp.enabled && <span className="ml-2 text-warning">Turned off in Lead Intel</span>}
+        {!icp.enabled && <span className="ml-2 text-warning">Archived</span>}
       </RuleRow>
       <RuleRow label="Searched on Google Maps">
         <Terms terms={icp.searchTerms} empty="Not sourced, only matched" />

@@ -5,6 +5,7 @@ import { notFound, usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { ChevronRight } from "lucide-react"
 import { BackendError } from "@/components/companies/backend-state"
+import { IcpLifecycleActions } from "@/components/icp-lifecycle-actions"
 import { PageHeader } from "@/components/page-header"
 import { Skeleton } from "@/components/ui/skeleton"
 import { PipelineStrip } from "@/components/status"
@@ -54,7 +55,11 @@ export default function IcpLayout({ children }: { children: ReactNode }) {
         <span className="truncate">{icp.name}</span>
       </nav>
       <div className="-mt-4 md:-mt-5">
-        <PageHeader title={icp.name} description={icp.description || `${icp.industry} · from Lead Intel`}>
+        <PageHeader
+          title={icp.name}
+          description={`${icp.enabled ? "" : "Archived · "}${icp.description || `${icp.industry} · from Lead Intel`}`}
+          actions={<IcpLifecycleActions icp={icp} />}
+        >
           <PipelineStrip leads={icpLeads} className="max-w-3xl" />
         </PageHeader>
       </div>

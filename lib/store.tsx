@@ -44,6 +44,9 @@ interface Store {
   createIcp: (input: api.IcpCreate, outreach?: Partial<IcpOutreach>) => Promise<{ icp: ICP; warning?: string; campaignNote?: string }>
   /** Change an ICP's Lead Intel fields (name, industry, rule…) in Lead Intel. Rejects with the backend's reason. */
   updateIcpDefinition: (id: string, input: api.IcpCreate) => Promise<{ icp: ICP; campaignNote?: string }>
+  /** Archive (off) or restore (on) an ICP; campaignNote says what happened to its campaign. */
+  setIcpArchived: (id: string, archived: boolean) => Promise<{ icp: ICP; campaignNote?: string }>
+  deleteIcp: (id: string) => Promise<void>
   /** Add one lead in the backend. Rejects with the backend's reason (e.g. they're already a lead). */
   addLead: (input: api.LeadInput) => Promise<Lead>
   /** Move leads to another ICP in the backend. */
@@ -283,6 +286,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return { icp, campaignNote: raw.campaignNote ?? undefined }
   }
 
+  const setIcpArchived: Store["setIcpArchived"] = async (id, archived) => {
+    const raw = await (archived ? api.archiveIcp : api.restoreIcp)(currentWorkspaceId, id)
+    const icp = api.toIcp(raw)
+    setIcps((list) => list.map((i) => (i.id === id ? icp : i)))
+    return { icp, campaignNote: raw.campaignNote ?? undefined }
+  }
+
+  const deleteIcp: Store["deleteIcp"] = async (id) => {
+    await api.deleteIcp(currentWorkspaceId, id)
+    setIcps((list) => list.filter((i) => i.id !== id))
+  }
+
   const updateIcp: Store["updateIcp"] = async (id, patch) => {
     const current = icps.find((i) => i.id === id)
     if (!current) return
@@ -436,6 +451,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         reloadIcps,
         updateIcp,
         updateIcpDefinition,
+        setIcpArchived,
+        deleteIcp,
         createIcp,
         addLead,
         moveLeads,

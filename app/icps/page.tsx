@@ -96,7 +96,7 @@ export default function IcpsPage() {
                   </Link>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Pill>{icp.industry}</Pill>
-                    {!icp.enabled && <Pill tone="warning">Off in Lead Intel</Pill>}
+                    {!icp.enabled && <Pill tone="warning">Archived</Pill>}
                     <span className="text-xs text-muted-foreground tabular-nums">
                       {icp.companyCount.toLocaleString()} {icp.companyCount === 1 ? "business" : "businesses"}
                       {icp.places.length ? ` · ${icp.places.slice(0, 2).join(", ")}` : ""}

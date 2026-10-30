@@ -497,6 +497,15 @@ export type IcpCreate = Pick<
 
 export const createIcp = (body: IcpCreate) => api<ApiIcp>("/icps", { method: "POST", body })
 
+/** Turn an ICP off and archive its campaign. Refused while the campaign still has leads in a sequence. */
+export const archiveIcp = (workspaceId: string, id: string) => api<ApiIcp>(`/icps/${id}/archive`, { workspaceId, method: "POST" })
+
+/** Turn an archived ICP back on, with a new draft campaign. */
+export const restoreIcp = (workspaceId: string, id: string) => api<ApiIcp>(`/icps/${id}/restore`, { workspaceId, method: "POST" })
+
+/** Delete an ICP nothing uses yet, and archive its campaign. Refused, with what uses it, otherwise. */
+export const deleteIcp = (workspaceId: string, id: string) => api<void>(`/icps/${id}`, { workspaceId, method: "DELETE" })
+
 /** Change an ICP's own fields in Lead Intel's icps table (shared, so Lead Intel sees it too). */
 export const updateIcpDefinition = (workspaceId: string, id: string, body: IcpCreate) =>
   api<ApiIcp>(`/icps/${id}`, { workspaceId, method: "PUT", body })
