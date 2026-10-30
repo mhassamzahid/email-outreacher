@@ -729,6 +729,8 @@ export interface CostItem {
   enabled: boolean
   /** A source Coldbrew can't run yet: shown for planning only. */
   planned: boolean
+  /** Costs nothing as Coldbrew runs it, unlike a price of 0 nobody has set yet. */
+  free: boolean
 }
 
 export interface CostEstimate {

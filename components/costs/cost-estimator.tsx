@@ -262,7 +262,7 @@ function Setup({
 function Price({ item, loading }: { item: CostItem; loading?: boolean }) {
   return (
     <p className="pt-2 text-right text-sm tabular-nums" title={item.note}>
-      {loading ? "…" : item.priceUsd > 0 ? formatUsd(item.priceUsd) : <span className="text-muted-foreground">Not set</span>}
+      {loading ? "…" : item.priceUsd > 0 ? formatUsd(item.priceUsd) : item.free ? "Free" : <span className="text-muted-foreground">Not set</span>}
       {item.priceUsd > 0 && !isPlan(item) && <span className="block text-xs text-muted-foreground">{item.unitLabel}</span>}
     </p>
   )
@@ -411,7 +411,7 @@ function Summary({ draft }: { draft: CostEstimate }) {
   const t = totals(draft)
   const counted = draft.items.filter((i) => i.enabled && usesPerMonth(i, draft) > 0)
   const priced = counted.filter((i) => i.priceUsd > 0).sort((a, b) => monthlyCost(b, draft) - monthlyCost(a, draft))
-  const unpriced = counted.filter((i) => i.priceUsd === 0)
+  const unpriced = counted.filter((i) => i.priceUsd === 0 && !i.free)
 
   return (
     <section className="space-y-4 rounded-lg border border-data/40 bg-data/5 p-5 lg:sticky lg:top-4">
