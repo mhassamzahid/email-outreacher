@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useState, type CSSProperties } from "react"
 import {
   Building2,
@@ -10,6 +10,7 @@ import {
   FileText,
   Gauge,
   LogOut,
+  UserPlus,
   CircleUserRound,
   Moon,
   Sun,
@@ -283,9 +284,12 @@ function CollapseToggle() {
   )
 }
 
-/** Who's signed in, as one row: its menu switches the theme, changes the password or signs out. */
+/** Who's signed in, as one row. Its menu switches to another account signed in on this browser (no
+ * password needed), adds one, switches the theme, changes the password or signs out of this account. */
 function AccountMenu() {
-  const { me, session, signOut } = useAuth()
+  const { me, session, signOut, accounts, switchAccount } = useAuth()
+  const pathname = usePathname()
+  const router = useRouter()
   const { resolvedTheme, setTheme } = useTheme()
   const [changing, setChanging] = useState(false)
   const email = me?.email ?? session?.user.email ?? ""
@@ -304,7 +308,34 @@ function AccountMenu() {
               <ChevronsUpDown className="size-3.5 text-muted-foreground" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-52">
+          <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-60">
+            <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">Accounts on this browser</DropdownMenuLabel>
+            {accounts.map((a) => {
+              const here = a.userId === session?.user.id
+              return (
+                <DropdownMenuItem
+                  key={a.userId}
+                  disabled={here}
+                  className="data-disabled:opacity-100"
+                  onSelect={() =>
+                    void switchAccount(a.userId).catch((e: unknown) =>
+                      toast.error("Couldn't switch", { description: e instanceof Error ? e.message : undefined }),
+                    )
+                  }
+                >
+                  <CircleUserRound />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{a.name || a.email}</span>
+                    {a.name && <span className="block truncate text-xs text-muted-foreground">{a.email}</span>}
+                  </span>
+                  {here && <Check className="text-data" aria-label="Current account" />}
+                </DropdownMenuItem>
+              )
+            })}
+            <DropdownMenuItem onSelect={() => router.push(`/login?add=1&next=${encodeURIComponent(pathname)}`)}>
+              <UserPlus /> Add another account
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => setTheme(dark ? "light" : "dark")}>
               {dark ? <Sun /> : <Moon />} {dark ? "Light theme" : "Dark theme"}
             </DropdownMenuItem>
@@ -313,7 +344,7 @@ function AccountMenu() {
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => void signOut()}>
-              <LogOut /> Sign out
+              <LogOut /> {accounts.length > 1 ? "Sign out of this account" : "Sign out"}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

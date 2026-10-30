@@ -23,14 +23,16 @@ function Login() {
   const router = useRouter()
   const params = useSearchParams()
   const next = params.get("next")?.startsWith("/") ? params.get("next")! : "/icps"
+  // Adding another account: the current one stays signed in on this browser until you switch back.
+  const adding = params.get("add") === "1"
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (session) router.replace(next)
-  }, [session, next, router])
+    if (session && !adding) router.replace(next)
+  }, [session, adding, next, router])
 
   const submit = async () => {
     setError("")
@@ -39,6 +41,8 @@ function Login() {
     setBusy(true)
     try {
       await signIn(email, password)
+      // A full load, so nothing from the account you were in carries over.
+      if (adding) window.location.assign(next)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong. Try again.")
     } finally {
@@ -56,8 +60,12 @@ function Login() {
         }}
       >
         <div className="space-y-1.5">
-          <h1 className="text-2xl font-semibold tracking-[-0.02em]">Sign in</h1>
-          <p className="text-sm text-muted-foreground">Use the account an admin made for you.</p>
+          <h1 className="text-2xl font-semibold tracking-[-0.02em]">{adding ? "Add an account" : "Sign in"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {adding
+              ? "You stay signed in to your other accounts on this browser. Switch between them from the account menu."
+              : "Use the account an admin made for you."}
+          </p>
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="email">Email</Label>
@@ -75,8 +83,13 @@ function Login() {
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <Button type="submit" size="lg" className="w-full" disabled={busy}>
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Signing in…" : adding ? "Add account" : "Sign in"}
         </Button>
+        {adding && session && (
+          <Button type="button" variant="ghost" className="w-full" onClick={() => router.replace(next)}>
+            Cancel
+          </Button>
+        )}
       </form>
     </AuthShell>
   )
