@@ -2,6 +2,11 @@ export type Source = "linkedin" | "instagram" | "facebook" | "website"
 
 export const SOURCES: Source[] = ["linkedin", "instagram", "facebook", "website"]
 
+/** What company research may read to verify a business: its website (our own reader), Jina when the
+ * reader is blocked, its Instagram profile, and Claude's fit score. */
+export type VerificationSource = "website" | "jina" | "instagram" | "score"
+export const VERIFICATION_SOURCES: VerificationSource[] = ["website", "jina", "instagram", "score"]
+
 export type MediaType = "text" | "image" | "video" | "carousel" | "article" | "page"
 
 /** Which text a Lead Intel ICP rule reads. Empty `sources` means all of them. */
@@ -54,7 +59,13 @@ export interface ICP {
   tone: string
   wordsToAvoid: string
   hookGuidance: string
+  /** Lead analysis: whose posts are read for the opening line. */
   enabledSources: Source[]
+  /** Verification: what research reads to decide whether a business is worth contacting. */
+  verificationSources: VerificationSource[]
+  /** Lead analysis limits for this ICP; null means the workspace setting in Settings. */
+  postsPerSource: number | null
+  maxPostAgeDays: number | null
   /** What we sell to this ICP (a product's id), or null. */
   productId: string | null
   /** null = use the default company verification template */
@@ -80,6 +91,9 @@ export type IcpOutreach = Pick<
   | "wordsToAvoid"
   | "hookGuidance"
   | "enabledSources"
+  | "verificationSources"
+  | "postsPerSource"
+  | "maxPostAgeDays"
   | "productId"
   | "verifyPromptId"
   | "hookPromptId"

@@ -5,16 +5,16 @@ import type { ReactNode } from "react"
 import { Plus } from "lucide-react"
 import { SourceIcon } from "@/components/source-icon"
 import { TagInput } from "@/components/tag-input"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { fetchProducts, useApi } from "@/lib/api"
 import { SOURCE_LABEL, formatUsd } from "@/lib/format"
-import { costPerLeadForSource } from "@/lib/costs"
+import { COST_PER_POST, FETCHED_SOURCES, costPerLeadForSource } from "@/lib/costs"
 import { useStore } from "@/lib/store"
-import type { ICP, IcpOutreach, IcpSource } from "@/lib/types"
-import { SOURCES } from "@/lib/types"
+import type { ICP, IcpOutreach, IcpSource, VerificationSource } from "@/lib/types"
 
 // The editable half of an ICP: this workspace's outreach settings. The ICP itself (name, industry,
 // matching rule) belongs to Lead Intel and is shown read-only by LeadIntelRule.
@@ -33,6 +33,9 @@ export const toDraft = (icp: ICP): IcpDraft => ({
   wordsToAvoid: icp.wordsToAvoid,
   hookGuidance: icp.hookGuidance,
   enabledSources: icp.enabledSources,
+  verificationSources: icp.verificationSources,
+  postsPerSource: icp.postsPerSource,
+  maxPostAgeDays: icp.maxPostAgeDays,
   productId: icp.productId,
 })
 
@@ -323,36 +326,101 @@ export function MessagingFields({ draft, set }: { draft: IcpDraft; set: SetDraft
   )
 }
 
+/** What reading one lead's posts costs, at most: every analysis source on, each with a full set of posts. */
 export function costPerLead(draft: Pick<IcpDraft, "enabledSources">, postsPerLead: number): number {
-  return draft.enabledSources.reduce((sum, s) => sum + costPerLeadForSource(s, postsPerLead), 0)
+  return FETCHED_SOURCES.filter((s) => draft.enabledSources.includes(s)).reduce((sum, s) => sum + costPerLeadForSource(s, postsPerLead), 0)
 }
 
-export function SourcesFields({ draft, set, postsPerLead }: { draft: IcpDraft; set: SetDraft; postsPerLead: number }) {
+const VERIFICATION: { source: VerificationSource; label: string; hint: string; cost: string }[] = [
+  { source: "website", label: "Website", hint: "Read by Coldbrew's own reader. Rules on website words need it.", cost: "Free" },
+  { source: "jina", label: "Jina fallback", hint: "Reads a site when it blocks Coldbrew's reader.", cost: "Free without a key" },
+  { source: "instagram", label: "Instagram profile", hint: "Followers, bio and recent posts, through Apify.", cost: "Apify" },
+  { source: "score", label: "Claude's fit score", hint: "Scores the fit from everything read. Off: the ICP's rules alone decide.", cost: "Claude" },
+]
+
+/** Verification: what research reads to decide whether a business is worth contacting. */
+export function VerificationSourcesFields({ draft, set }: { draft: IcpDraft; set: SetDraft }) {
+  const toggle = (s: VerificationSource, on: boolean) =>
+    set("verificationSources", on ? [...new Set([...draft.verificationSources, s])] : draft.verificationSources.filter((x) => x !== s))
   return (
     <div className="space-y-3">
-      {SOURCES.map((s) => {
-        const on = draft.enabledSources.includes(s)
-        const cost = costPerLeadForSource(s, postsPerLead)
-        return (
-          <div key={s} className="flex items-center gap-3">
-            <SourceIcon source={s} />
-            <Label htmlFor={`src-${s}`} className="flex-1 font-normal">
-              {SOURCE_LABEL[s]}
-            </Label>
-            <span className="text-xs text-muted-foreground tabular-nums">{cost ? formatUsd(cost) : "Free"}</span>
-            <Switch
-              id={`src-${s}`}
-              checked={on}
-              onCheckedChange={(checked) =>
-                set("enabledSources", checked ? [...draft.enabledSources, s] : draft.enabledSources.filter((x) => x !== s))
-              }
-            />
-          </div>
-        )
-      })}
-      <p className="border-t pt-3 text-xs text-muted-foreground">
-        Up to <b className="text-foreground tabular-nums">{formatUsd(costPerLead(draft, postsPerLead))}</b> per lead
-        when every enabled source has a URL, at {postsPerLead} posts per source.
+      {VERIFICATION.map((v) => (
+        <div key={v.source} className="flex items-start gap-3">
+          <Label htmlFor={`verify-${v.source}`} className="flex-1 flex-col items-start gap-0.5 font-normal">
+            <span>{v.label}</span>
+            <span className="text-xs text-muted-foreground">{v.hint}</span>
+          </Label>
+          <span className="pt-0.5 text-xs whitespace-nowrap text-muted-foreground">{v.cost}</span>
+          <Switch
+            id={`verify-${v.source}`}
+            checked={draft.verificationSources.includes(v.source)}
+            onCheckedChange={(on) => toggle(v.source, on)}
+          />
+        </div>
+      ))}
+      <p className="border-t pt-3 text-xs text-muted-foreground">How many pages of each site are read is set in Settings, Website reading.</p>
+    </div>
+  )
+}
+
+/** Analysis: each lead's recent posts, read to find something specific to open the email with. */
+export function AnalysisSourcesFields({
+  draft,
+  set,
+  postsPerLead,
+  maxPostAgeDays,
+}: {
+  draft: IcpDraft
+  set: SetDraft
+  postsPerLead: number
+  maxPostAgeDays: number
+}) {
+  const posts = draft.postsPerSource ?? postsPerLead
+  const limit = (key: "postsPerSource" | "maxPostAgeDays", label: string, fallback: number, max: number, unit: string) => (
+    <div className="space-y-1.5">
+      <Label htmlFor={`analysis-${key}`} className="text-xs font-normal text-muted-foreground">
+        {label}
+      </Label>
+      <Input
+        id={`analysis-${key}`}
+        inputMode="numeric"
+        placeholder={`${fallback} (Settings)`}
+        value={draft[key] ?? ""}
+        onChange={(e) => {
+          const raw = e.target.value.replace(/[^0-9]/g, "")
+          set(key, raw === "" ? null : Math.min(max, Math.max(1, Number(raw))))
+        }}
+      />
+      <p className="text-xs text-muted-foreground">
+        1 to {max} {unit}. Empty uses Settings.
+      </p>
+    </div>
+  )
+  return (
+    <div className="space-y-3">
+      {FETCHED_SOURCES.map((s) => (
+        <div key={s} className="flex items-center gap-3">
+          <SourceIcon source={s} />
+          <Label htmlFor={`src-${s}`} className="flex-1 font-normal">
+            {SOURCE_LABEL[s]} posts
+          </Label>
+          <span className="text-xs text-muted-foreground tabular-nums">{formatUsd(COST_PER_POST[s])} a post</span>
+          <Switch
+            id={`src-${s}`}
+            checked={draft.enabledSources.includes(s)}
+            onCheckedChange={(checked) =>
+              set("enabledSources", checked ? [...new Set([...draft.enabledSources, s])] : draft.enabledSources.filter((x) => x !== s))
+            }
+          />
+        </div>
+      ))}
+      <div className="grid grid-cols-2 gap-3 border-t pt-3">
+        {limit("postsPerSource", "Posts per source", postsPerLead, 20, "posts")}
+        {limit("maxPostAgeDays", "Max post age (days)", maxPostAgeDays, 365, "days")}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Up to <b className="text-foreground tabular-nums">{formatUsd(costPerLead(draft, posts))}</b> per lead when each source has a
+        profile, at {posts} posts per source.
       </p>
     </div>
   )

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Pencil } from "lucide-react"
 import { toast } from "sonner"
 import { EditIcpDefinition } from "@/components/edit-icp-definition"
-import { BasicsFields, LeadIntelRule, MessagingFields, ProductField, SourcesFields, TargetingFields, toDraft, type IcpDraft } from "@/components/icp-form"
+import { BasicsFields, LeadIntelRule, MessagingFields, ProductField, AnalysisSourcesFields, TargetingFields, VerificationSourcesFields, toDraft, type IcpDraft } from "@/components/icp-form"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -111,15 +111,26 @@ function DefinitionForm({ icp }: { icp: ICP }) {
           </Card>
         </div>
 
-        <Card className="h-fit lg:sticky lg:top-16">
-          <CardHeader>
-            <CardTitle>Enrichment sources</CardTitle>
-            <CardDescription>Estimated cost per lead.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <SourcesFields draft={draft} set={set} postsPerLead={settings.postsPerLead} />
-          </CardContent>
-        </Card>
+        <div className="h-fit space-y-6 lg:sticky lg:top-16">
+          <Card>
+            <CardHeader>
+              <CardTitle>Verification sources</CardTitle>
+              <CardDescription>What research reads to decide whether a business is worth contacting.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VerificationSourcesFields draft={draft} set={set} />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Analysis sources</CardTitle>
+              <CardDescription>Each lead&apos;s recent posts, read to find something specific to open the email with.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AnalysisSourcesFields draft={draft} set={set} postsPerLead={settings.postsPerLead} maxPostAgeDays={settings.maxPostAgeDays} />
+            </CardContent>
+          </Card>
+        </div>
       </div>
       {editing && <EditIcpDefinition icp={icp} onClose={() => setEditing(false)} />}
     </div>

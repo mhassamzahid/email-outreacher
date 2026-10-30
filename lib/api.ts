@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { accessToken, supabase } from "./supabase"
-import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, Source, User, Workspace } from "./types"
+import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, Source, User, VerificationSource, Workspace } from "./types"
 
 // The backend. Pages fetch on mount and show their own loading and error states.
 
@@ -127,7 +127,10 @@ const EMPTY_OUTREACH: IcpOutreach = {
   tone: "",
   wordsToAvoid: "",
   hookGuidance: "",
-  enabledSources: ["linkedin", "website"],
+  enabledSources: ["linkedin"],
+  verificationSources: ["website", "jina", "instagram", "score"],
+  postsPerSource: null,
+  maxPostAgeDays: null,
   productId: null,
   verifyPromptId: null,
   hookPromptId: null,
@@ -137,7 +140,14 @@ const EMPTY_OUTREACH: IcpOutreach = {
 /** One ICP for the app: Lead Intel's fields plus this workspace's outreach settings (or empty ones). */
 export function toIcp(api: ApiIcp): ICP {
   const { profile, ...leadIntel } = api
-  const outreach = profile ? { ...EMPTY_OUTREACH, ...profile, enabledSources: profile.enabledSources as Source[] } : EMPTY_OUTREACH
+  const outreach = profile
+    ? {
+        ...EMPTY_OUTREACH,
+        ...profile,
+        enabledSources: profile.enabledSources as Source[],
+        verificationSources: (profile.verificationSources ?? EMPTY_OUTREACH.verificationSources) as VerificationSource[],
+      }
+    : EMPTY_OUTREACH
   return { ...leadIntel, ...outreach, updatedAt: profile?.updatedAt ?? api.updatedAt }
 }
 
@@ -154,6 +164,9 @@ export const saveIcpOutreach = (workspaceId: string, icpId: string, outreach: Ic
     wordsToAvoid: outreach.wordsToAvoid,
     hookGuidance: outreach.hookGuidance,
     enabledSources: outreach.enabledSources,
+    verificationSources: outreach.verificationSources,
+    postsPerSource: outreach.postsPerSource,
+    maxPostAgeDays: outreach.maxPostAgeDays,
     productId: outreach.productId,
     verifyPromptId: outreach.verifyPromptId,
     hookPromptId: outreach.hookPromptId,

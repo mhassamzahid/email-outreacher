@@ -41,8 +41,8 @@ export function EnrichDialog({
   const [progress, setProgress] = useState("")
   const targets = leads.filter((l) => leadIds.includes(l.id))
   const sources = FETCHED_SOURCES.filter((s) => icp.enabledSources.includes(s))
-  const maxPosts = Math.min(20, Math.max(1, settings.postsPerLead))
-  const maxAgeDays = Math.min(365, Math.max(1, settings.maxPostAgeDays))
+  const maxPosts = Math.min(20, Math.max(1, icp.postsPerSource ?? settings.postsPerLead))
+  const maxAgeDays = Math.min(365, Math.max(1, icp.maxPostAgeDays ?? settings.maxPostAgeDays))
   const withUrl = {
     linkedin: targets.filter((l) => l.linkedinUrl).length,
     instagram: targets.filter((l) => l.instagramUrl).length,
