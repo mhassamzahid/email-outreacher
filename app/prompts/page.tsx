@@ -23,6 +23,7 @@ import { shortDate } from "@/lib/format"
 import { FOLLOWUP_KINDS, ICP_PROMPT_FIELD, type IcpPromptKind, icpsUsingTemplate, isIcpPromptKind, resolveScoringTemplate } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import type { PromptKind, PromptTemplate } from "@/lib/types"
+import { ManagerOnly } from "@/components/manager-only"
 
 const SECTIONS: { kind: PromptKind; title: string; description: string }[] = [
   {
@@ -75,11 +76,11 @@ export default function PromptsPage() {
         title="Prompts"
         description={`${templates.length} prompts, every one versioned. Open one to edit, test and compare versions.`}
         actions={
-          <Button asChild>
+          <ManagerOnly><Button asChild>
             <Link href="/prompts/new">
               <Plus /> New prompt
             </Link>
-          </Button>
+          </Button></ManagerOnly>
         }
       />
       <div className="space-y-8 px-4 pb-10 md:px-8">

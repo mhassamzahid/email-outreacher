@@ -26,6 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LEAD_STATUS_LABEL, SOURCE_LABEL, fullName, leadSources } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { LEAD_STATUSES, SOURCES } from "@/lib/types"
+import { ManagerOnly } from "@/components/manager-only"
 
 export default function LeadsPage() {
   const { leads, leadsStatus, leadsError, reloadLeads, icps, moveLeads, deleteLeads } = useStore()
@@ -122,13 +123,13 @@ export default function LeadsPage() {
             </SelectContent>
           </Select>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button variant="outline" disabled={!runIcp} title={runHint} onClick={() => setRun("posts")}>
+            <ManagerOnly><Button variant="outline" disabled={!runIcp} title={runHint} onClick={() => setRun("posts")}>
               <Sparkles /> Fetch posts{ids.length ? ` (${ids.length})` : ""}
-            </Button>
-            <Button variant="outline" disabled={!runIcp} title={runHint} onClick={() => setRun("emails")}>
+            </Button></ManagerOnly>
+            <ManagerOnly><Button variant="outline" disabled={!runIcp} title={runHint} onClick={() => setRun("emails")}>
               <Wand2 /> Write emails{ids.length ? ` (${ids.length})` : ""}
-            </Button>
-            <Button
+            </Button></ManagerOnly>
+            <ManagerOnly><Button
               variant="outline"
               disabled={ids.length === 0}
               onClick={() => {
@@ -137,10 +138,10 @@ export default function LeadsPage() {
               }}
             >
               <ArrowRightLeft /> Move{ids.length ? ` (${ids.length})` : ""}
-            </Button>
-            <Button variant="destructive" disabled={ids.length === 0} onClick={() => setDeleteOpen(true)}>
+            </Button></ManagerOnly>
+            <ManagerOnly><Button variant="destructive" disabled={ids.length === 0} onClick={() => setDeleteOpen(true)}>
               <Trash2 /> Delete{ids.length ? ` (${ids.length})` : ""}
-            </Button>
+            </Button></ManagerOnly>
           </div>
         </div>
 

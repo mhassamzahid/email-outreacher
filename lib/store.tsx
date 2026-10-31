@@ -1,14 +1,14 @@
 "use client"
 
-import { createContext, useCallback, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react"
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
 import { toast } from "sonner"
 import * as api from "./api"
 import { useAuth } from "./auth"
 import { DEFAULT_SETTINGS } from "./defaults"
 import type { ICP, IcpOutreach, Lead, PromptKind, PromptTemplate, PromptVersion, Settings, User, Workspace } from "./types"
 
-// App state shared across pages, for the signed-in person. Workspaces, ICPs, leads, prompts and users
-// come from the backend; general settings still live only in this browser.
+// App state shared across pages, for the signed-in person. Workspaces, ICPs, leads, prompts, users and the
+// workspace's settings come from the backend.
 
 export type VersionDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens" | "maxPosts">
 
@@ -21,8 +21,10 @@ interface Store {
   reloadLeads: () => void
   templates: PromptTemplate[]
   versions: PromptVersion[]
+  /** The workspace's defaults, review and auto-send settings, from the backend (shared by everyone in it). */
   settings: Settings
-  setSettings: Dispatch<SetStateAction<Settings>>
+  /** Save them for the whole workspace. Rejects with the reason when this role can't change them. */
+  saveSettings: (next: Settings) => Promise<void>
 
   /** Lead Intel's ICPs with this workspace's outreach settings. Empty until loaded; see icpsStatus. */
   icpsStatus: "loading" | "ready" | "error"
@@ -105,7 +107,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [promptsStatus, setPromptsStatus] = useState<Store["promptsStatus"]>("loading")
   const [promptsError, setPromptsError] = useState<string | null>(null)
   const [promptsTick, setPromptsTick] = useState(0)
-  const [settings, setSettings] = useState(DEFAULT_SETTINGS)
+  // Kept with the workspace they belong to, so another workspace never shows these.
+  const [loadedSettings, setLoadedSettings] = useState<{ workspaceId: string; settings: Settings } | null>(null)
   const { me } = useAuth()
   // Admins see everyone (loaded below); anyone else only themselves.
   const [allUsers, setUsers] = useState<User[]>([])
@@ -153,6 +156,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       live = false
     }
   }, [workspacesTick])
+
+  // Settings belong to the workspace: everyone in it sees the same, saved in the backend.
+  useEffect(() => {
+    if (!currentWorkspaceId) return
+    let live = true
+    api
+      .fetchGeneralSettings(currentWorkspaceId)
+      .then((saved) => live && setLoadedSettings({ workspaceId: currentWorkspaceId, settings: saved }))
+      .catch((e: unknown) => live && toast.error("Couldn't load settings", { description: e instanceof Error ? e.message : undefined }))
+    return () => {
+      live = false
+    }
+  }, [currentWorkspaceId])
+  const settings = loadedSettings?.workspaceId === currentWorkspaceId ? loadedSettings.settings : DEFAULT_SETTINGS
+
+  const saveSettings: Store["saveSettings"] = async (next) => {
+    const saved = await api.saveGeneralSettings(currentWorkspaceId, next)
+    setLoadedSettings({ workspaceId: currentWorkspaceId, settings: saved })
+  }
 
   const meId = me?.id
   const meRole = me?.role
@@ -434,7 +456,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         templates,
         versions,
         settings,
-        setSettings,
+        saveSettings,
         icpsStatus,
         icpsError,
         reloadIcps,

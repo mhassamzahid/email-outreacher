@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { type PipelineCompany, fetchCompanyContent, fetchCompanyDetail, useApi } from "@/lib/api"
 import { useAuth } from "@/lib/auth"
 import { compactCount, shortDate } from "@/lib/format"
+import { ManagerOnly } from "@/components/manager-only"
 
 const RULE_SOURCE: Record<string, string> = {
   business_name: "business name",
@@ -130,19 +131,19 @@ export function PipelineSheet({
           {company.statusReason && <p className="pt-1 text-[13px] text-muted-foreground">{company.statusReason}</p>}
           <div className="flex flex-wrap gap-2 pt-2">
             {company.status === "qualified" && (
-              <Button size="sm" onClick={onFindStakeholders}>
+              <ManagerOnly><Button size="sm" onClick={onFindStakeholders}>
                 <UserSearch /> Find stakeholders
-              </Button>
+              </Button></ManagerOnly>
             )}
             {company.status !== "qualified" && (
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("qualified")}>
+              <ManagerOnly><Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("qualified")}>
                 <Check /> Keep
-              </Button>
+              </Button></ManagerOnly>
             )}
             {company.status !== "not_fit" && (
-              <Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("not_fit")}>
+              <ManagerOnly><Button size="sm" variant="outline" disabled={busy} onClick={() => onStatus("not_fit")}>
                 <X /> Drop
-              </Button>
+              </Button></ManagerOnly>
             )}
             {canExclude && (
               <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setExcluding(true)}>

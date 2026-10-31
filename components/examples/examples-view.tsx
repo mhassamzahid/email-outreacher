@@ -29,6 +29,7 @@ import {
   useApi,
 } from "@/lib/api"
 import { shortDate } from "@/lib/format"
+import { ManagerOnly } from "@/components/manager-only"
 
 const EMPTY: ExampleEmailFields = { subject: "", body: "", note: "", allIcps: false, icpIds: [] }
 
@@ -66,9 +67,9 @@ function Examples({ wsId }: { wsId: string }) {
           title="No example emails yet"
           description="Add emails written the way you want yours to sound, or save good ones from the Feedback page."
           action={
-            <Button onClick={() => setEditing("new")}>
+            <ManagerOnly><Button onClick={() => setEditing("new")}>
               <Plus /> Add an example
-            </Button>
+            </Button></ManagerOnly>
           }
         />
       ) : (
@@ -87,9 +88,9 @@ function Examples({ wsId }: { wsId: string }) {
                 ))}
               </SelectContent>
             </Select>
-            <Button className="ml-auto" onClick={() => setEditing("new")}>
+            <ManagerOnly><Button className="ml-auto" onClick={() => setEditing("new")}>
               <Plus /> Add an example
-            </Button>
+            </Button></ManagerOnly>
           </div>
           {visible.length === 0 ? (
             <EmptyState icon={Mail} title="No examples for this ICP" description="Add one, or link an existing example to it." />

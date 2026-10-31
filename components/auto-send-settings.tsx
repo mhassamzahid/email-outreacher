@@ -17,7 +17,13 @@ import type { ScoringSettings } from "@/lib/types"
 
 /** Threshold, auto-send and daily cap. One Save for the panel; turning auto-send on asks first. */
 export function AutoSendSettings() {
-  const { settings, setSettings, templates, currentWorkspaceId } = useStore()
+  const { settings } = useStore()
+  // The form starts from the saved settings, so it starts again when they arrive or change.
+  return <AutoSendForm key={JSON.stringify(settings.scoring)} />
+}
+
+function AutoSendForm() {
+  const { settings, saveSettings, templates, currentWorkspaceId } = useStore()
   const emails = useApi(() => (currentWorkspaceId ? fetchEmails(currentWorkspaceId) : Promise.resolve([])), [currentWorkspaceId])
   const [draft, setDraft] = useState<ScoringSettings>(settings.scoring)
   const [confirmOn, setConfirmOn] = useState(false)
@@ -42,14 +48,16 @@ export function AutoSendSettings() {
   const scoreTemplates = templates.filter((x) => x.kind === "score")
   const defaultTemplate = scoreTemplates.find((x) => x.isDefault)
 
-  const apply = () => {
-    setSettings((s) => ({ ...s, scoring: draft }))
-    toast.success(
-      draft.autoSend
-        ? `Saved. Drafts scoring ${t} or more with no flags will be sent automatically.`
-        : "Saved. Every draft waits for review.",
-    )
-  }
+  const apply = () =>
+    saveSettings({ ...settings, scoring: draft })
+      .then(() =>
+        toast.success("Saved for everyone in this workspace", {
+          description: draft.autoSend
+            ? "Nothing is sent on its own yet: approved drafts still go out when someone queues them in Review."
+            : "Every draft waits for review.",
+        }),
+      )
+      .catch((e: unknown) => toast.error("Couldn't save", { description: e instanceof Error ? e.message : undefined }))
 
   return (
     <form

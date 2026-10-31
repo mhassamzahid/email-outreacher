@@ -26,6 +26,7 @@ import {
   useApi,
 } from "@/lib/api"
 import { shortDate } from "@/lib/format"
+import { ManagerOnly } from "@/components/manager-only"
 
 const FIELDS: { key: Exclude<keyof ProductFields, "name" | "url">; label: string; hint: string; placeholder: string; rows: number }[] = [
   {
@@ -100,17 +101,17 @@ function Products({ wsId }: { wsId: string }) {
           title="No products yet"
           description="Add what you sell, then pick a product on each ICP. Its details become available to that ICP's prompts."
           action={
-            <Button onClick={() => setEditing("new")}>
+            <ManagerOnly><Button onClick={() => setEditing("new")}>
               <Plus /> Add a product
-            </Button>
+            </Button></ManagerOnly>
           }
         />
       ) : (
         <>
           <div className="flex justify-end">
-            <Button onClick={() => setEditing("new")}>
+            <ManagerOnly><Button onClick={() => setEditing("new")}>
               <Plus /> Add a product
-            </Button>
+            </Button></ManagerOnly>
           </div>
           <div className="overflow-x-auto rounded-lg border">
             <Table>

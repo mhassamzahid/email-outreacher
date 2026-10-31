@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { KIND_LABEL } from "@/lib/prompt-starters"
 import { useStore, type VersionDraft } from "@/lib/store"
 import type { PromptTemplate, PromptVersion } from "@/lib/types"
+import { ManagerOnly } from "@/components/manager-only"
 
 export default function PromptEditorPage() {
   const { id } = useParams<{ id: string }>()
@@ -153,9 +154,9 @@ function Editor({
             >
               <Copy /> Duplicate
             </Button>
-            <Button size="sm" disabled={!dirty} onClick={() => setSaveOpen(true)}>
+            <ManagerOnly><Button size="sm" disabled={!dirty} onClick={() => setSaveOpen(true)}>
               <Save /> Save as new version
-            </Button>
+            </Button></ManagerOnly>
           </>
         }
       />

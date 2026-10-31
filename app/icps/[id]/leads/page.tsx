@@ -15,6 +15,7 @@ import { LEAD_STATUS_LABEL, fullName } from "@/lib/format"
 import { ENRICHABLE, GENERATABLE } from "@/lib/selectors"
 import { useStore } from "@/lib/store"
 import { LEAD_STATUSES } from "@/lib/types"
+import { ManagerOnly } from "@/components/manager-only"
 
 export default function IcpLeadsPage() {
   const icp = useIcpParam()
@@ -72,15 +73,15 @@ export default function IcpLeadsPage() {
         </Select>
         <div className="ml-auto flex flex-wrap gap-2">
           <AddLeadsMenu icpId={icp.id} />
-          <Button variant="outline" disabled={enrichSelected.length === 0} onClick={() => setEnrichIds(enrichSelected)}>
+          <ManagerOnly><Button variant="outline" disabled={enrichSelected.length === 0} onClick={() => setEnrichIds(enrichSelected)}>
             <Sparkles /> Fetch posts{enrichSelected.length ? ` (${enrichSelected.length})` : ""}
-          </Button>
-          <Button variant="outline" disabled={enrichAll.length === 0} onClick={() => setEnrichIds(enrichAll)}>
+          </Button></ManagerOnly>
+          <ManagerOnly><Button variant="outline" disabled={enrichAll.length === 0} onClick={() => setEnrichIds(enrichAll)}>
             Fetch posts for all new ({enrichAll.length})
-          </Button>
-          <Button disabled={generateTargets.length === 0} onClick={() => setGenerateIds(generateTargets)}>
+          </Button></ManagerOnly>
+          <ManagerOnly><Button disabled={generateTargets.length === 0} onClick={() => setGenerateIds(generateTargets)}>
             <Wand2 /> Write emails ({generateTargets.length})
-          </Button>
+          </Button></ManagerOnly>
         </div>
       </div>
 

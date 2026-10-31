@@ -29,6 +29,7 @@ import {
 import { formatUsd, shortDate } from "@/lib/format"
 import { useStore } from "@/lib/store"
 import { cn } from "@/lib/utils"
+import { ManagerOnly } from "@/components/manager-only"
 
 const MIN_RATED = 3
 const FILTERS = [
@@ -137,14 +138,14 @@ function Feedback({ wsId }: { wsId: string }) {
           {activeIcp && ratedForIcp < MIN_RATED && (
             <span className="text-xs text-muted-foreground">Rate {MIN_RATED - ratedForIcp} more to improve the prompt</span>
           )}
-          <Button
+          <ManagerOnly><Button
             variant="outline"
             disabled={!activeIcp || ratedForIcp < MIN_RATED}
             title={!activeIcp ? "Pick an ICP first" : undefined}
             onClick={() => activeIcp && setImproving(activeIcp)}
           >
             <Sparkles /> Improve email prompt
-          </Button>
+          </Button></ManagerOnly>
         </div>
       </div>
 

@@ -54,7 +54,13 @@ function Panel({
 }
 
 export default function SettingsPage() {
-  const { settings, setSettings, currentWorkspaceId } = useStore()
+  const { settings } = useStore()
+  // The form starts from the saved settings, so it starts again when they arrive or change.
+  return <SettingsView key={JSON.stringify(settings)} />
+}
+
+function SettingsView() {
+  const { settings, saveSettings, currentWorkspaceId } = useStore()
   // What Claude, Apollo and Apify have cost since the 1st, from the Usage log.
   const usage = useApi(() => fetchUsage(currentWorkspaceId, new Date().getDate()), [currentWorkspaceId])
   const spent = usage.data?.providers.reduce((sum, p) => sum + p.costUsd, 0) ?? 0
@@ -87,10 +93,10 @@ export default function SettingsPage() {
   const near = ratio >= WARN_AT
   const remaining = settings.monthlyBudgetUsd - spent
 
-  const save = () => {
-    setSettings((s) => ({ ...s, defaultModel: draft.defaultModel, ...parsed }))
-    toast.success("Settings saved")
-  }
+  const save = () =>
+    saveSettings({ ...settings, defaultModel: draft.defaultModel, ...parsed })
+      .then(() => toast.success("Settings saved for everyone in this workspace"))
+      .catch((e: unknown) => toast.error("Couldn't save settings", { description: e instanceof Error ? e.message : undefined }))
 
   const numberField = (key: "postsPerLead" | "maxPostAgeDays" | "monthlyBudgetUsd", label: string, hint: string) => (
     <div className="space-y-1.5">

@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { type Mailbox, type Mailboxes, fetchMailboxes, fetchSendingCampaigns, runFollowUps, syncCampaigns, useApi } from "@/lib/api"
 import { formatUsd, shortDate } from "@/lib/format"
 import { useStore } from "@/lib/store"
+import { ManagerOnly } from "@/components/manager-only"
 
 const WARMUP_LABEL: Record<string, { label: string; tone: PillTone }> = {
   warming: { label: "Warming up", tone: "info" },
@@ -241,9 +242,9 @@ function CampaignsCard({ fallback }: { fallback: Mailboxes["campaigns"] }) {
             <Button size="sm" variant="ghost" className="-my-1" disabled={busy} onClick={() => void setUp()}>
               <Wand2 /> Set up campaigns
             </Button>
-            <Button size="sm" variant="ghost" className="-my-1" disabled={busy} onClick={() => void check()}>
+            <ManagerOnly><Button size="sm" variant="ghost" className="-my-1" disabled={busy} onClick={() => void check()}>
               <Sparkles /> Check follow-ups now
-            </Button>
+            </Button></ManagerOnly>
           </>
         )}
       </div>

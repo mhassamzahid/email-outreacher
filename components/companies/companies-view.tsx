@@ -32,6 +32,7 @@ import {
 } from "@/lib/api"
 import { formatUsd } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { ManagerOnly } from "@/components/manager-only"
 
 const MAX_RESEARCH = 10
 const FILTERS: { value: "all" | PipelineStatus; label: string }[] = [
@@ -164,15 +165,15 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
           <Input aria-label="Search companies" placeholder="Search name or domain" className="pl-8" value={query} onChange={(e) => setQuery(e.target.value)} />
         </div>
         <div className="flex flex-wrap gap-2 sm:ml-auto">
-          <Button variant="outline" onClick={() => setFinding("lead_intel")}>
+          <ManagerOnly><Button variant="outline" onClick={() => setFinding("lead_intel")}>
             <Download /> Import from Lead Intel
-          </Button>
-          <Button variant="outline" onClick={() => setFinding("google_maps")}>
+          </Button></ManagerOnly>
+          <ManagerOnly><Button variant="outline" onClick={() => setFinding("google_maps")}>
             <MapPin /> Search Google Maps
-          </Button>
-          <Button onClick={() => setFinding("apollo")}>
+          </Button></ManagerOnly>
+          <ManagerOnly><Button onClick={() => setFinding("apollo")}>
             <Search /> Search Apollo
-          </Button>
+          </Button></ManagerOnly>
         </div>
       </div>
 
@@ -198,7 +199,7 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
         <div className="flex flex-wrap items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
           <span className="text-sm tabular-nums">{picked.length} selected</span>
           <div className="ml-auto flex flex-wrap gap-2">
-            <Button
+            <ManagerOnly><Button
               size="sm"
               variant="outline"
               disabled={!toResearch.length || toResearch.length > MAX_RESEARCH || !!busy}
@@ -206,10 +207,10 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
               onClick={() => void research(toResearch)}
             >
               <FlaskConical /> {busy === "research" ? "Researching…" : `Research ${toResearch.length}`}
-            </Button>
-            <Button size="sm" disabled={!qualified.length || !!busy} onClick={() => setStakeholdersFor(qualified)}>
+            </Button></ManagerOnly>
+            <ManagerOnly><Button size="sm" disabled={!qualified.length || !!busy} onClick={() => setStakeholdersFor(qualified)}>
               <UserSearch /> Find stakeholders at {qualified.length}
-            </Button>
+            </Button></ManagerOnly>
           </div>
         </div>
       )}
@@ -225,15 +226,15 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
           description="Import companies Lead Intel matched to an ICP (already verified), or search Google Maps or Apollo (researched and scored next)."
           action={
             <div className="flex flex-wrap justify-center gap-2">
-              <Button variant="outline" onClick={() => setFinding("lead_intel")}>
+              <ManagerOnly><Button variant="outline" onClick={() => setFinding("lead_intel")}>
                 <Download /> Import from Lead Intel
-              </Button>
-              <Button variant="outline" onClick={() => setFinding("google_maps")}>
+              </Button></ManagerOnly>
+              <ManagerOnly><Button variant="outline" onClick={() => setFinding("google_maps")}>
                 <MapPin /> Search Google Maps
-              </Button>
-              <Button onClick={() => setFinding("apollo")}>
+              </Button></ManagerOnly>
+              <ManagerOnly><Button onClick={() => setFinding("apollo")}>
                 <Search /> Search Apollo
-              </Button>
+              </Button></ManagerOnly>
             </div>
           }
         />
@@ -290,9 +291,9 @@ function Pipeline({ wsId, initialIcp }: { wsId: string; initialIcp: string }) {
                         <UserSearch /> People
                       </Button>
                     ) : needsResearch(c) ? (
-                      <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void research([c])}>
+                      <ManagerOnly><Button size="sm" variant="outline" disabled={!!busy} onClick={() => void research([c])}>
                         <FlaskConical /> Research
-                      </Button>
+                      </Button></ManagerOnly>
                     ) : null}
                   </TableCell>
                 </TableRow>

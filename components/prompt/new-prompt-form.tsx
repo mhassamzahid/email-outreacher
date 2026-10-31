@@ -27,7 +27,7 @@ type Source = { kind: PromptKind; from: string }
 
 /** New prompt page: basics, the prompt itself, where it is used, and a test run before creating. */
 export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
-  const { templates, versions, icps, settings, createTemplate, updateIcp, setSettings } = useStore()
+  const { templates, versions, icps, settings, createTemplate, updateIcp, saveSettings } = useStore()
   const router = useRouter()
 
   const loadSource = ({ kind, from }: Source): VersionDraft => {
@@ -111,7 +111,11 @@ export function NewPromptForm({ initialKind }: { initialKind: PromptKind }) {
       ).length
       if (failed) toast.error(`Created, but ${failed} ICP${failed === 1 ? "" : "s"} couldn't be switched to it`)
     }
-    if (kind === "score" && useForScoring) setSettings((s) => ({ ...s, scoring: { ...s.scoring, promptId: tpl.id } }))
+    if (kind === "score" && useForScoring) {
+      await saveSettings({ ...settings, scoring: { ...settings.scoring, promptId: tpl.id } }).catch((e: unknown) =>
+        toast.error("Created, but it couldn't be made the scoring prompt", { description: e instanceof Error ? e.message : undefined }),
+      )
+    }
     setDone(true)
     const uses = [
       icpIds.size && `used by ${icpIds.size} ICP${icpIds.size === 1 ? "" : "s"}`,

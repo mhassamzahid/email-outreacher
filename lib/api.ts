@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react"
 import { accessToken, supabase } from "./supabase"
-import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, User, Workspace } from "./types"
+import type { Company, ICP, IcpOutreach, Lead, LeadStatus, PromptKind, PromptTemplate, PromptVersion, Role, Settings, User, Workspace } from "./types"
 
 // The backend. Pages fetch on mount and show their own loading and error states.
 
@@ -1011,6 +1011,14 @@ export const fetchFeedbackSettings = (workspaceId: string) => api<FeedbackSettin
 
 export const saveFeedbackSettings = (workspaceId: string, body: FeedbackSettings) =>
   api<FeedbackSettings>("/settings/feedback", { workspaceId, method: "PUT", body })
+
+// ---------- Settings: defaults, review and auto-send, kept for the whole workspace ----------
+
+/** Management changes the model and posts; only admins change the budget, auto-send and scoring. */
+export const fetchGeneralSettings = (workspaceId: string) => api<Settings>("/settings/general", { workspaceId })
+
+export const saveGeneralSettings = (workspaceId: string, body: Settings) =>
+  api<Settings>("/settings/general", { workspaceId, method: "PUT", body })
 
 // ---------- Settings: how much of a company's website research reads ----------
 

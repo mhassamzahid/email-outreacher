@@ -64,3 +64,10 @@ export function initials(name: string): string {
 export function otherActiveAdmins(users: User[], userId: string): number {
   return users.filter((u) => u.id !== userId && u.role === "admin" && u.status === "active").length
 }
+
+/** The Roles tab's "Campaign setup": ICPs, prompts, products, example emails and anything that spends budget. */
+export function canManage(role: Role | undefined): boolean {
+  return role === "admin" || role === "management"
+}
+
+export const MANAGERS_ONLY_HINT = "Management and admins only"

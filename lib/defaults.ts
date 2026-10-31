@@ -1,6 +1,6 @@
 import type { Settings } from "./types"
 
-// Starting values for what isn't stored in the backend yet: the browser-side settings.
+// What a workspace's settings show until the backend's answer arrives (its own defaults are the same).
 
 export const DEFAULT_SETTINGS: Settings = {
   defaultModel: "claude-haiku-5-5",

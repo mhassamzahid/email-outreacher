@@ -35,6 +35,7 @@ import {
 } from "@/lib/api"
 import { formatUsd, shortDate } from "@/lib/format"
 import { useStore } from "@/lib/store"
+import { ManagerOnly } from "@/components/manager-only"
 
 const MAX_REVEAL = 25
 const MAX_FETCH = 25
@@ -249,7 +250,7 @@ function PeopleList({ wsId }: { wsId: string }) {
             <Button size="sm" variant="outline" disabled={!toAdd.length || !!busy} onClick={() => void addLeads()}>
               <UserPlus /> {busy === "add" ? "Adding…" : `Add ${toAdd.length} as leads`}
             </Button>
-            <Button
+            <ManagerOnly><Button
               size="sm"
               variant="outline"
               disabled={!withLead.length || withLead.length > MAX_FETCH || !!busy}
@@ -257,8 +258,8 @@ function PeopleList({ wsId }: { wsId: string }) {
               onClick={() => setFetchingPosts(true)}
             >
               <Newspaper /> Fetch posts for {withLead.length}
-            </Button>
-            <Button
+            </Button></ManagerOnly>
+            <ManagerOnly><Button
               size="sm"
               variant="outline"
               disabled={!withLead.length || withLead.length > MAX_FETCH || !!busy}
@@ -266,15 +267,15 @@ function PeopleList({ wsId }: { wsId: string }) {
               onClick={() => void writeEmails()}
             >
               <Sparkles /> {busy === "write" ? "Writing…" : `Write emails for ${withLead.length}`}
-            </Button>
-            <Button
+            </Button></ManagerOnly>
+            <ManagerOnly><Button
               size="sm"
               disabled={!toReveal.length || toReveal.length > MAX_REVEAL || !!busy}
               title={toReveal.length > MAX_REVEAL ? `Reveal up to ${MAX_REVEAL} at a time` : undefined}
               onClick={() => setConfirmingReveal(true)}
             >
               <MailCheck /> {busy === "reveal" ? "Revealing…" : `Reveal ${toReveal.length} ${toReveal.length === 1 ? "email" : "emails"}`}
-            </Button>
+            </Button></ManagerOnly>
           </div>
         </div>
       )}

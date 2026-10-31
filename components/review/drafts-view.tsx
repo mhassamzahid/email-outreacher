@@ -19,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { type EmailDraft, type EmailStatus, fetchEmails, generateEmails, queueEmails, updateEmail, useApi } from "@/lib/api"
 import { formatUsd, shortDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { ManagerOnly } from "@/components/manager-only"
 
 const FILTERS: { value: string; label: string; test: (s: EmailStatus) => boolean }[] = [
   { value: "review", label: "To review", test: (s) => s === "draft" || s === "edited" },
@@ -394,9 +395,9 @@ function DraftSheet({
               onChange={(e) => setInstruction(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">Runs hook selection and the email again, replacing this draft and your edits.</p>
-            <Button size="sm" variant="outline" disabled={!!busy} onClick={() => void rewrite()}>
+            <ManagerOnly><Button size="sm" variant="outline" disabled={!!busy} onClick={() => void rewrite()}>
               <Sparkles /> {busy === "rewrite" ? "Rewriting…" : "Rewrite"}
-            </Button>
+            </Button></ManagerOnly>
           </section>
         )}
       </SheetContent>
