@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ArrowRightLeft, Search, Trash2, Users } from "lucide-react"
+import { ArrowRightLeft, Search, Sparkles, Trash2, Users, Wand2 } from "lucide-react"
 import { toast } from "sonner"
 import { AddLeadsMenu } from "@/components/add-leads"
 import { BackendError } from "@/components/companies/backend-state"
@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog"
 import { EmptyState } from "@/components/empty-state"
 import { LeadsTable } from "@/components/leads-table"
 import { PageHeader } from "@/components/page-header"
+import { EnrichDialog, GenerateDialog } from "@/components/run-dialogs"
 import { TableSkeleton } from "@/components/table-skeleton"
 import { Button } from "@/components/ui/button"
 import {
@@ -40,6 +41,7 @@ export default function LeadsPage() {
   const [moveOpen, setMoveOpen] = useState(false)
   const [moveTarget, setMoveTarget] = useState("")
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [run, setRun] = useState<"posts" | "emails" | null>(null)
 
   const q = query.trim().toLowerCase()
   const visible = leads.filter((l) => {
@@ -54,6 +56,10 @@ export default function LeadsPage() {
   })
   const filtered = query || icpFilter !== "all" || status !== "all" || source !== "all"
   const ids = Array.from(selected)
+  // Posts and emails follow an ICP's sources and prompts, so they run for leads of one ICP at a time.
+  const selectedIcpIds = new Set(leads.filter((l) => selected.has(l.id)).map((l) => l.icpId))
+  const runIcp = selectedIcpIds.size === 1 ? icps.find((i) => i.id === [...selectedIcpIds][0]) : undefined
+  const runHint = ids.length === 0 ? "Select leads first" : runIcp ? undefined : "Select leads from one ICP"
 
   const clear = () => {
     setQuery("")
@@ -115,7 +121,13 @@ export default function LeadsPage() {
               <SelectItem value="none">No social profiles</SelectItem>
             </SelectContent>
           </Select>
-          <div className="ml-auto flex gap-2">
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" disabled={!runIcp} title={runHint} onClick={() => setRun("posts")}>
+              <Sparkles /> Fetch posts{ids.length ? ` (${ids.length})` : ""}
+            </Button>
+            <Button variant="outline" disabled={!runIcp} title={runHint} onClick={() => setRun("emails")}>
+              <Wand2 /> Write emails{ids.length ? ` (${ids.length})` : ""}
+            </Button>
             <Button
               variant="outline"
               disabled={ids.length === 0}
@@ -159,6 +171,13 @@ export default function LeadsPage() {
           <LeadsTable leads={visible} selected={selected} onSelectedChange={setSelected} showIcp />
         )}
       </div>
+
+      {run === "posts" && runIcp && (
+        <EnrichDialog icp={runIcp} leadIds={ids} open onOpenChange={(o) => !o && setRun(null)} />
+      )}
+      {run === "emails" && runIcp && (
+        <GenerateDialog icp={runIcp} leadIds={ids} open onOpenChange={(o) => !o && setRun(null)} />
+      )}
 
       <Dialog open={moveOpen} onOpenChange={setMoveOpen}>
         <DialogContent>

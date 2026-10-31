@@ -38,7 +38,7 @@ export function AuthGate({ sidebarOpen, children }: { sidebarOpen: boolean; chil
   if (session === undefined || session === null || (!me && !meError))
     return (
       <Centered>
-        <p className="text-sm text-muted-foreground">{session === null ? "Taking you to sign in…" : "Signing you in…"}</p>
+        <p className="wait-appear text-sm text-muted-foreground">{session === null ? "Taking you to sign in…" : "Signing you in…"}</p>
       </Centered>
     )
 

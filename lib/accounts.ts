@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js"
+import type { User } from "./types"
 
 // The accounts signed in on this browser, so you can switch between them without a password, the way
 // Gmail does. Each keeps its own Supabase session (the same tokens Supabase already keeps in this
@@ -14,6 +15,8 @@ export interface SavedAccount {
   refreshToken: string
   /** When it was last the current account; the most recent comes first. */
   lastUsed: number
+  /** The backend's last answer to who they are, shown at once on the next page load while it's asked again. */
+  me?: User
 }
 
 function read(): SavedAccount[] {
@@ -51,13 +54,14 @@ export function rememberSession(session: Session) {
       accessToken: session.access_token,
       refreshToken: session.refresh_token,
       lastUsed: Date.now(),
+      me: before?.me,
     },
   ])
 }
 
-/** Keep the account's display name once the backend has said who they are. */
-export function rememberName(userId: string, name: string) {
-  write(read().map((a) => (a.userId === userId ? { ...a, name } : a)))
+/** Keep what the backend said about who they are: the display name, and the record itself for the next page load. */
+export function rememberMe(userId: string, me: User) {
+  write(read().map((a) => (a.userId === userId ? { ...a, name: me.name || a.name, me } : a)))
 }
 
 export function forgetAccount(userId: string) {

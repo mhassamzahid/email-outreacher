@@ -1,8 +1,8 @@
 "use client"
 
 import type { Session } from "@supabase/supabase-js"
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react"
-import { type SavedAccount, forgetAccount, rememberName, rememberSession, savedAccounts } from "./accounts"
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react"
+import { type SavedAccount, forgetAccount, rememberMe, rememberSession, savedAccounts } from "./accounts"
 import { fetchMe } from "./api"
 import { supabase } from "./supabase"
 import type { User } from "./types"
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((u) => {
         if (!live) return
         setLoaded({ for: userId, me: u, error: null })
-        if (u.name) rememberName(userId, u.name)
+        rememberMe(userId, u)
         setAccounts(savedAccounts())
       })
       .catch(
@@ -77,7 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [userId, tick])
   const current = loaded && loaded.for === userId ? loaded : null
-  const me = current?.me ?? null
+  // Until the backend answers, who they were last time: a full page load then shows the app at once instead of
+  // "Signing you in…". The backend still checks every request, and its answer replaces this.
+  const savedMe = useMemo(() => (userId ? (savedAccounts().find((a) => a.userId === userId)?.me ?? null) : null), [userId])
+  const me = current ? current.me : savedMe
   const meError = current?.error ?? null
 
   const signIn = useCallback(async (email: string, password: string) => {

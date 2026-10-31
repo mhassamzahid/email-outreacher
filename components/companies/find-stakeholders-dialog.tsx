@@ -26,13 +26,15 @@ const SENIORITIES: { value: string; label: string }[] = [
 
 const SOURCES = [
   { value: "apollo", label: "Apollo", hint: "Needs a paid Apollo plan. Searching uses no credits; revealing an email is about 1 credit." },
-  { value: "linkedin", label: "LinkedIn (Apify)", hint: "Full names and LinkedIn, no emails. About $0.003 per person (Basic profiles)." },
+  { value: "linkedin", label: "LinkedIn (Apify)", hint: "Full names and LinkedIn, no emails. $0.02 per company searched, plus about $0.003 per person." },
 ] as const
 
 const DEFAULT_TITLES = ["Owner", "Founder", "CEO", "President", "General Manager"]
 const DEFAULT_SENIORITIES = ["owner", "founder", "c_suite"]
-// Apify's Short profile mode is about $4 per 1,000 profiles.
-const LINKEDIN_COST_PER_PERSON = 0.004
+// What Apify charged on 2026-10-31 (Bronze plan): $0.02 each time the actor starts, which is once per
+// company, plus $0.003 per Basic profile.
+const LINKEDIN_COST_PER_COMPANY = 0.02
+const LINKEDIN_COST_PER_PERSON = 0.003
 
 type Result = StakeholderSearchResult & { costUsd?: number | null }
 
@@ -64,7 +66,7 @@ export function FindStakeholdersDialog({
   const tooMany = companies.length > limit
   const max = Number(perCompany)
   const badMax = linkedin && !(Number.isInteger(max) && max >= 1 && max <= 50)
-  const estimate = linkedin && !badMax ? companies.length * max * LINKEDIN_COST_PER_PERSON : 0
+  const estimate = linkedin && !badMax ? companies.length * (LINKEDIN_COST_PER_COMPANY + max * LINKEDIN_COST_PER_PERSON) : 0
 
   const run = async () => {
     setRunning(true)

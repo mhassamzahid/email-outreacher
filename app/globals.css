@@ -284,6 +284,16 @@
   }
 }
 
+/* A wait message that only shows if the wait is long: a normal page load is done before it appears. */
+@keyframes wait-appear {
+  from {
+    opacity: 0;
+  }
+}
+.wait-appear {
+  animation: wait-appear 200ms ease-out 800ms both;
+}
+
 /* ---------- Sign-in: the ring field ---------- */
 .login-panel {
   background: var(--login-panel);
