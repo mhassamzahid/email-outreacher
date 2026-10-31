@@ -151,7 +151,7 @@ export function ApolloSearchDialog({
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="find-locations">Locations</Label>
-              <TagInput id="find-locations" value={locations} onChange={setLocations} placeholder="City, state or country" />
+              <TagInput places id="find-locations" value={locations} onChange={setLocations} placeholder="City, state or country" />
               <p className="text-xs text-muted-foreground">From the ICP&apos;s places. Empty means anywhere.</p>
             </div>
             <fieldset className="space-y-1.5">

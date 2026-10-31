@@ -206,7 +206,7 @@ export function IcpRuleInputs({ icp, set, errors }: { icp: IcpCreate; set: SetIc
         </IcpField>
       </div>
       <IcpField id="icp-places" label="Only in these places" hint="Towns or states. Empty means anywhere.">
-        <TagInput id="icp-places" value={icp.places} onChange={(v) => set("places", v)} placeholder="Chicago" />
+        <TagInput places id="icp-places" value={icp.places} onChange={(v) => set("places", v)} placeholder="Chicago" />
       </IcpField>
       <Label className="flex cursor-pointer items-center gap-2 text-sm font-normal">
         <Switch checked={icp.requiresWebsite} onCheckedChange={(v) => set("requiresWebsite", v)} />

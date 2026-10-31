@@ -8,17 +8,21 @@ export function TagInput({
   value,
   onChange,
   placeholder,
+  places = false,
 }: {
   id?: string
   value: string[]
   onChange: (next: string[]) => void
   placeholder?: string
+  /** Places keep their commas ("Chicago, IL" is one place): only Enter or ";" separates them. */
+  places?: boolean
 }) {
   const [text, setText] = useState("")
+  const separator = places ? ";" : ","
 
   const commit = () => {
     const parts = text
-      .split(",")
+      .split(separator)
       .map((t) => t.trim())
       .filter((t) => t && !value.includes(t))
     if (parts.length) onChange([...value, ...parts])
@@ -26,7 +30,7 @@ export function TagInput({
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter" || e.key === separator) {
       e.preventDefault()
       commit()
     } else if (e.key === "Backspace" && !text && value.length) {

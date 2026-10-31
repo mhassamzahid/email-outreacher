@@ -123,9 +123,9 @@ export function GoogleMapsSearchDialog({
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="maps-locations">Places</Label>
-            <TagInput id="maps-locations" value={locations} onChange={setLocations} placeholder="Chicago, IL" />
+            <TagInput places id="maps-locations" value={locations} onChange={setLocations} placeholder="Chicago, IL" />
             <p className={errors.locations ? "text-xs text-destructive" : "text-xs text-muted-foreground"}>
-              {errors.locations || "US cities, states or postcodes. From the ICP's places."}
+              {errors.locations || "US cities, states or postcodes, like Chicago, IL. Press Enter after each. From the ICP's places."}
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
