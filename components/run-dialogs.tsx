@@ -24,6 +24,15 @@ function batches<T>(list: T[]): T[][] {
   return out
 }
 
+/** Which networks to fetch for an ICP's leads, how many posts and how far back (the ICP's own, else Settings). */
+function postSettings(icp: ICP, settings: { postsPerLead: number; maxPostAgeDays: number }) {
+  return {
+    sources: FETCHED_SOURCES.filter((s) => icp.enabledSources.includes(s)),
+    maxPosts: Math.min(20, Math.max(1, icp.postsPerSource ?? settings.postsPerLead)),
+    maxAgeDays: Math.min(365, Math.max(1, icp.maxPostAgeDays ?? settings.maxPostAgeDays)),
+  }
+}
+
 /** Fetch the leads' recent LinkedIn and Instagram posts through Apify, for the sources the ICP has on. */
 export function EnrichDialog({
   icp,
@@ -40,9 +49,7 @@ export function EnrichDialog({
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState("")
   const targets = leads.filter((l) => leadIds.includes(l.id))
-  const sources = FETCHED_SOURCES.filter((s) => icp.enabledSources.includes(s))
-  const maxPosts = Math.min(20, Math.max(1, icp.postsPerSource ?? settings.postsPerLead))
-  const maxAgeDays = Math.min(365, Math.max(1, icp.maxPostAgeDays ?? settings.maxPostAgeDays))
+  const { sources, maxPosts, maxAgeDays } = postSettings(icp, settings)
   const withUrl = {
     linkedin: targets.filter((l) => l.linkedinUrl).length,
     instagram: targets.filter((l) => l.instagramUrl).length,
@@ -139,8 +146,20 @@ export function GenerateDialog({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
-  const { templates, currentWorkspaceId, reloadLeads } = useStore()
+  const { templates, leads, settings, currentWorkspaceId, reloadLeads } = useStore()
   const [instruction, setInstruction] = useState("")
+  // Emails are written from everything we know: leads whose posts were never fetched get them first.
+  const post = postSettings(icp, settings)
+  const needPosts = leads.filter(
+    (l) =>
+      leadIds.includes(l.id) &&
+      (l.status === "imported" || l.status === "failed") &&
+      post.sources.some((s) => (s === "linkedin" ? l.linkedinUrl : l.instagramUrl)),
+  )
+  const postsCeiling = post.sources.reduce(
+    (sum, s) => sum + needPosts.filter((l) => (s === "linkedin" ? l.linkedinUrl : l.instagramUrl)).length * post.maxPosts * COST_PER_POST[s],
+    0,
+  )
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState("")
   const hookPrompt = resolveTemplate(templates, icp, "hook")
@@ -153,6 +172,18 @@ export function GenerateDialog({
     const problems: string[] = []
     const groups = batches(leadIds)
     try {
+      let postsCost = 0
+      for (const ids of batches(needPosts.map((l) => l.id))) {
+        setProgress("fetching their posts first")
+        try {
+          const r = await fetchLeadPosts(currentWorkspaceId, { leadIds: ids, maxPosts: post.maxPosts, maxAgeDays: post.maxAgeDays, sources: [...post.sources] })
+          postsCost += r.costUsd ?? 0
+          if (r.error) problems.push(`Posts: ${r.error}`)
+        } catch (e) {
+          problems.push(`Posts couldn't be fetched: ${e instanceof Error ? e.message : "unknown error"}`)
+        }
+      }
+      if (postsCost) problems.push(`Apify charged ${formatUsd(postsCost)} for their posts.`)
       for (const [i, ids] of groups.entries()) {
         setProgress(groups.length > 1 ? `Batch ${i + 1} of ${groups.length}` : "")
         const r = await generateEmails(currentWorkspaceId, ids, instruction)
@@ -200,8 +231,15 @@ export function GenerateDialog({
             onChange={(e) => setInstruction(e.target.value)}
           />
         </div>
+        {needPosts.length > 0 && (
+          <p className="text-sm">
+            {needPosts.length} lead{needPosts.length === 1 ? " has" : "s have"} no posts fetched yet. Their recent posts are
+            fetched first, so the email is written from them (Apify, at most {formatUsd(postsCeiling)}).
+          </p>
+        )}
         <p className="text-xs text-muted-foreground">
-          Claude charges per email; what each run cost shows on the{" "}
+          Each email is written from their posts, their company&apos;s website and posts, and this ICP&apos;s details. Claude
+          charges per email; what each run cost shows on the{" "}
           <Link href="/usage" className="underline">
             Usage
           </Link>{" "}
