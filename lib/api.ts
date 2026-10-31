@@ -511,15 +511,16 @@ export const removeExclusion = (id: string) => api<void>(`/exclusions/${id}`, { 
 export const excludeCompany = (workspaceId: string, companyId: string, reason: ExclusionReason, note = "") =>
   api<Exclusion[]>(`/exclusions/company/${companyId}`, { workspaceId, method: "POST", body: { reason, note } })
 
-// ---------- Users: role and workspaces here; accounts and passwords in Supabase ----------
+// ---------- Users: role and workspaces here; adding someone also makes their Supabase sign-in ----------
 
 export const fetchMe = () => api<User>("/me")
 
 /** Admins only. */
 export const fetchUsers = () => api<User[]>("/users")
 
-export const addUserApi = (body: { name: string; email: string; role: Role; workspaceIds: string[] }) =>
-  api<User>("/users", { method: "POST", body })
+/** Adds them and makes their sign-in with this password; "existing" when the email already had one (from Lead Intel). */
+export const addUserApi = (body: { name: string; email: string; role: Role; workspaceIds: string[]; password: string }) =>
+  api<User & { signIn: "created" | "existing" }>("/users", { method: "POST", body })
 
 export const updateUserApi = (
   id: string,

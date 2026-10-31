@@ -10,8 +10,6 @@ import type { ICP, IcpOutreach, Lead, PromptKind, PromptTemplate, PromptVersion,
 // App state shared across pages, for the signed-in person. Workspaces, ICPs, leads, prompts and users
 // come from the backend; general settings still live only in this browser.
 
-const uid = (prefix: string) => `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
-
 export type VersionDraft = Pick<PromptVersion, "systemPrompt" | "userPrompt" | "model" | "temperature" | "maxTokens" | "maxPosts">
 
 interface Store {
@@ -76,8 +74,8 @@ interface Store {
   currentUserId: string
   currentWorkspaceId: string
   setCurrentWorkspace: (id: string) => void
-  /** Adds the person by email, ready for their first sign-in. Their account is made in Supabase. */
-  inviteUser: (input: Pick<User, "name" | "email" | "role" | "workspaceIds">) => User
+  /** Adds them and makes their sign-in. Waits for the answer: it can be refused (a weak password, say). */
+  inviteUser: (input: Pick<User, "name" | "email" | "role" | "workspaceIds"> & { password: string }) => Promise<"created" | "existing">
   updateUser: (id: string, patch: Partial<Pick<User, "name" | "role" | "workspaceIds" | "status">>) => void
   removeUser: (id: string) => void
   /** Saved in the backend. Rejects with the backend's reason (e.g. the name is taken). */
@@ -373,19 +371,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setTemplates((list) => list.map((t) => (t.kind === tpl.kind ? { ...t, isDefault: t.id === templateId } : t)))
   }
 
-  const inviteUser: Store["inviteUser"] = (input) => {
-    const user: User = {
-      ...input,
-      name: input.name.trim(),
-      email: input.email.trim().toLowerCase(),
-      id: uid("usr"),
-      status: "invited",
-      lastActiveAt: null,
-      createdAt: new Date().toISOString(),
-    }
+  const inviteUser: Store["inviteUser"] = async (input) => {
+    const { signIn, ...user } = await api.addUserApi({ ...input, name: input.name.trim(), email: input.email.trim().toLowerCase() })
     setUsers((list) => [...list, user])
-    void save("Couldn't add them", api.addUserApi(input), reloadUsers)
-    return user
+    return signIn
   }
 
   const updateUser: Store["updateUser"] = (id, patch) => {

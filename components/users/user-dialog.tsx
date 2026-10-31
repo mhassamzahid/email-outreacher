@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { Copy, RefreshCw } from "lucide-react"
 import { toast } from "sonner"
 import { RolePicker } from "@/components/users/role-picker"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import { ROLE_LABEL, otherActiveAdmins } from "@/lib/roles"
 import { useStore } from "@/lib/store"
 import type { Role, User } from "@/lib/types"
 
-/** Add someone by email (their account is made in Supabase), or edit a user's name, role and workspaces. */
+/** Add someone (with their sign-in and first password), or edit a user's name, role and workspaces. */
 export function UserDialog({ user, initialRole, onClose }: { user?: User; initialRole?: Role; onClose: () => void }) {
   const { users, workspaces, currentUserId, currentWorkspaceId, inviteUser, updateUser } = useStore()
   const [name, setName] = useState(user?.name ?? "")
@@ -29,7 +30,10 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
     if (user?.role === "admin" && role === "admin" && next !== "admin") setWorkspaceIds([])
     setRoleState(next)
   }
-  const [touched, setTouched] = useState({ name: false, email: false })
+  const [password, setPassword] = useState(() => (user ? "" : newPassword()))
+  const [saving, setSaving] = useState(false)
+  const [failure, setFailure] = useState("")
+  const [touched, setTouched] = useState({ name: false, email: false, password: false })
 
   const isSelf = user?.id === currentUserId
   const lastAdmin = !!user && user.role === "admin" && otherActiveAdmins(users, user.id) === 0
@@ -42,28 +46,42 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
       : emailTaken
         ? "Someone with this email is already a user"
         : "",
+    password: user || password.length >= 12 ? "" : "Use at least 12 characters",
     // Admins see every workspace, so there's nothing to choose.
     workspaces: role === "admin" || workspaceIds.length ? "" : "Pick at least one workspace",
   }
-  const valid = !errors.name && !errors.email && !errors.workspaces
+  const valid = !errors.name && !errors.email && !errors.password && !errors.workspaces
   const allWorkspaces = role === "admin"
 
-  const submit = () => {
+  const submit = async () => {
     if (!valid) {
-      setTouched({ name: true, email: true })
+      setTouched({ name: true, email: true, password: true })
       return
     }
     const ids = allWorkspaces ? workspaces.map((w) => w.id) : workspaceIds
     if (user) {
       updateUser(user.id, { name: name.trim(), role, workspaceIds: ids })
       toast.success(`Saved ${name.trim()}`)
-    } else {
-      inviteUser({ name, email, role, workspaceIds: ids })
-      toast.success(`Added ${name.trim()}`, {
-        description: "Now make their account in the Supabase dashboard (Authentication, Add user) with this email and a password.",
-      })
+      onClose()
+      return
     }
-    onClose()
+    setSaving(true)
+    setFailure("")
+    try {
+      const signIn = await inviteUser({ name, email, role, workspaceIds: ids, password })
+      toast.success(`Added ${name.trim()}`, {
+        description:
+          signIn === "created"
+            ? `They sign in with ${email.trim().toLowerCase()} and the password you set. Send it to them privately.`
+            : "They already have a sign-in from Lead Intel, so they use that same password. The one you set wasn't used.",
+        duration: 10000,
+      })
+      onClose()
+    } catch (e) {
+      setFailure(e instanceof Error ? e.message : "Couldn't add them.")
+    } finally {
+      setSaving(false)
+    }
   }
 
   const toggleWorkspace = (id: string, on: boolean) =>
@@ -77,7 +95,7 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
           <DialogDescription>
             {user
               ? "Change their role and which workspaces they can open."
-              : "Their role and workspaces are ready for their first sign-in. Make their account, with a password, in the Supabase dashboard."}
+              : "This makes their sign-in too. Send them the email and password privately."}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -85,7 +103,7 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
           className="space-y-5"
           onSubmit={(e) => {
             e.preventDefault()
-            submit()
+            void submit()
           }}
         >
           <div className="grid gap-4 sm:grid-cols-2">
@@ -115,6 +133,44 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
               {touched.email && errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
           </div>
+
+          {!user && (
+            <div className="space-y-1.5">
+              <Label htmlFor="user-password">First password</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="user-password"
+                  value={password}
+                  autoComplete="new-password"
+                  spellCheck={false}
+                  className="font-mono"
+                  aria-invalid={(touched.password && !!errors.password) || undefined}
+                  onBlur={() => setTouched((t) => ({ ...t, password: true }))}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <Button type="button" variant="outline" size="icon" title="Make a new one" aria-label="Make a new password" onClick={() => setPassword(newPassword())}>
+                  <RefreshCw />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Copy"
+                  aria-label="Copy the password"
+                  onClick={() => void navigator.clipboard.writeText(password).then(() => toast.success("Password copied"))}
+                >
+                  <Copy />
+                </Button>
+              </div>
+              {touched.password && errors.password ? (
+                <p className="text-xs text-destructive">{errors.password}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  At least 12 characters. If they already sign in to Lead Intel, they keep that password instead.
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <p className="text-sm font-medium">Role</p>
@@ -162,15 +218,29 @@ export function UserDialog({ user, initialRole, onClose }: { user?: User; initia
             )}
           </fieldset>
         </form>
+        {failure && <p className="text-sm text-destructive">{failure}</p>}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form="user-form">
-            {user ? "Save changes" : "Add user"}
+          <Button type="submit" form="user-form" disabled={saving}>
+            {user ? "Save changes" : saving ? "Adding…" : "Add user"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   )
+}
+
+/** A random 16-character password, without characters that are easy to misread (0/O, 1/l/I). */
+function newPassword(): string {
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+  let out = ""
+  while (out.length < 16) {
+    // Bytes past the last whole multiple of the alphabet are skipped, so every character is equally likely.
+    for (const b of crypto.getRandomValues(new Uint8Array(32))) {
+      if (b < 256 - (256 % chars.length) && out.length < 16) out += chars[b % chars.length]
+    }
+  }
+  return out
 }

@@ -2,7 +2,7 @@
 
 import { createClient } from "@supabase/supabase-js"
 
-// Supabase Auth, for signing in only. Accounts are made in the Supabase dashboard (there's no sign-up),
+// Supabase Auth, for signing in only. Accounts are made by admins on the Users page (there's no sign-up),
 // and the session lives in this browser. The data itself always goes through our backend.
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ""

@@ -17,7 +17,7 @@ export default function LoginPage() {
   )
 }
 
-/** Email and password. There's no sign-up: accounts are made, and passwords reset, in the Supabase dashboard. */
+/** Email and password. There's no sign-up: admins add people (and their first password) on the Users page. */
 function Login() {
   const { session, signIn } = useAuth()
   const router = useRouter()
